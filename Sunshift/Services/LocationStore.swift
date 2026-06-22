@@ -11,13 +11,16 @@ final class LocationStore {
     // MARK: - UserDefaults keys
 
     private enum Keys {
-        static let savedLocations  = "sunshift.savedLocations"
+        static let savedLocations   = "sunshift.savedLocations"
         static let activeLocationID = "sunshift.activeLocationID"
     }
 
     // MARK: - Init
 
-    init() {
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         loadSavedLocations()
         loadActiveLocation()
     }
@@ -26,7 +29,7 @@ final class LocationStore {
 
     func loadSavedLocations() {
         guard
-            let data = UserDefaults.standard.data(forKey: Keys.savedLocations),
+            let data = defaults.data(forKey: Keys.savedLocations),
             let decoded = try? JSONDecoder().decode([SavedLocation].self, from: data)
         else {
             savedLocations = []
@@ -37,7 +40,7 @@ final class LocationStore {
 
     func loadActiveLocation() {
         guard
-            let idString = UserDefaults.standard.string(forKey: Keys.activeLocationID),
+            let idString = defaults.string(forKey: Keys.activeLocationID),
             let id = UUID(uuidString: idString)
         else {
             activeLocation = nil
@@ -74,12 +77,12 @@ final class LocationStore {
 
     func setActiveLocation(_ location: SavedLocation) {
         activeLocation = location
-        UserDefaults.standard.set(location.id.uuidString, forKey: Keys.activeLocationID)
+        defaults.set(location.id.uuidString, forKey: Keys.activeLocationID)
     }
 
     func clearActiveLocation() {
         activeLocation = nil
-        UserDefaults.standard.removeObject(forKey: Keys.activeLocationID)
+        defaults.removeObject(forKey: Keys.activeLocationID)
     }
 
     // MARK: - Resolved location
@@ -108,6 +111,6 @@ final class LocationStore {
 
     private func persistSavedLocations() {
         guard let data = try? JSONEncoder().encode(savedLocations) else { return }
-        UserDefaults.standard.set(data, forKey: Keys.savedLocations)
+        defaults.set(data, forKey: Keys.savedLocations)
     }
 }
