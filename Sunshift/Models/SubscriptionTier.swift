@@ -6,18 +6,20 @@ enum SubscriptionTier {
 }
 
 // Templates available per tier
-enum RoutineTemplate: String, CaseIterable, Identifiable {
-    case sunsetWalk = "Sunset Walk"
-    case sunriseMeditation = "Sunrise Meditation"
-    case goldenHourPhoto = "Golden Hour Photo"
-    case morningLight = "Morning Light"
+enum RoutineTemplate: String, CaseIterable, Identifiable, Codable {
+    case sunsetWalk       = "Sunset Walk"
+    case morningLight     = "Morning Light"
+    case wakeBeforeSunrise = "Wake Before Sunrise"
+    case goldenHourShoot  = "Golden Hour Shoot"
+    case windDown         = "Wind Down"
+    case lastLight        = "Last Light"
 
     var id: String { rawValue }
 
     var requiresPlus: Bool {
         switch self {
         case .sunsetWalk: return false
-        case .sunriseMeditation, .goldenHourPhoto, .morningLight: return true
+        case .morningLight, .wakeBeforeSunrise, .goldenHourShoot, .windDown, .lastLight: return true
         }
     }
 }
