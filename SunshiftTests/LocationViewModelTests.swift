@@ -61,7 +61,7 @@ final class MockGeocodingService: LocationGeocodingServiceProtocol {
 private func makeVM(
     permissionStatus: LocationPermissionStatus = .notDetermined,
     deviceService: MockDeviceLocationService? = nil,
-    geocodingService: MockGeocodingService = MockGeocodingService(),
+    geocodingService: MockGeocodingService? = nil,
     subscriptionTier: SubscriptionTier = .free
 ) -> (vm: LocationViewModel, store: LocationStore, deviceService: MockDeviceLocationService) {
     let device: MockDeviceLocationService
@@ -71,6 +71,7 @@ private func makeVM(
         device = MockDeviceLocationService()
         device.permissionStatus = permissionStatus
     }
+    let geocoder = geocodingService ?? MockGeocodingService()
     let sub = SubscriptionService()
     sub.tier = subscriptionTier
     let defaults = UserDefaults(suiteName: "LocationViewModelTests-\(UUID().uuidString)")!
@@ -78,7 +79,7 @@ private func makeVM(
     let vm = LocationViewModel(
         store: store,
         deviceLocationService: device,
-        geocodingService: geocodingService,
+        geocodingService: geocoder,
         subscriptionService: sub
     )
     return (vm, store, device)
