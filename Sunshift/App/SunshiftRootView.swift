@@ -16,11 +16,13 @@ private struct MainTabView: View {
     var body: some View {
         TabView {
             TodayView()
-                .tabItem { Label("Today", systemImage: "sun.max") }
+                .tabItem { Label("Today", systemImage: "sun.max.fill") }
             RoutinesView()
-                .tabItem { Label("Routines", systemImage: "list.bullet.rectangle") }
+                .tabItem { Label("Routines", systemImage: "bell.fill") }
             LocationsView()
-                .tabItem { Label("Locations", systemImage: "map") }
+                .tabItem { Label("Locations", systemImage: "location.fill") }
+            PlusView()
+                .tabItem { Label("Plus", systemImage: "sparkles") }
         }
     }
 }
