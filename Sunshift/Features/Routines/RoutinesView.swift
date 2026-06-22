@@ -4,41 +4,58 @@ struct RoutinesView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 32) {
+                VStack(spacing: SunshiftSpacing.xl) {
                     // Hero
-                    VStack(spacing: 12) {
+                    VStack(spacing: SunshiftSpacing.sm) {
                         Image(systemName: "bell.fill")
                             .font(.system(size: 72))
-                            .foregroundStyle(SunshiftColor.sky)
+                            .foregroundStyle(SunshiftColors.duskPurple)
                         Text("Solar Routines")
-                            .font(SunshiftFont.display())
+                            .font(SunshiftTypography.display())
+                            .foregroundStyle(SunshiftColors.primaryText)
                         Text("Create habits that fire at sunrise, sunset, or any solar milestone — every day, automatically.")
-                            .font(SunshiftFont.body())
-                            .foregroundStyle(.secondary)
+                            .font(SunshiftTypography.body())
+                            .foregroundStyle(SunshiftColors.secondaryText)
                             .multilineTextAlignment(.center)
                     }
-                    .padding(.top, 24)
+                    .padding(.top, SunshiftSpacing.lg)
                     .padding(.horizontal)
 
                     // Placeholder routine rows
-                    VStack(spacing: 12) {
-                        PlaceholderRoutineRow(icon: "sunrise.fill", color: SunshiftColor.sunrise, title: "Morning Wind-Up", trigger: "At Sunrise")
-                        PlaceholderRoutineRow(icon: "sun.max.fill", color: .yellow, title: "Midday Check-In", trigger: "At Solar Noon")
-                        PlaceholderRoutineRow(icon: "sunset.fill", color: SunshiftColor.sunset, title: "Evening Wind-Down", trigger: "30 min before Sunset")
+                    VStack(spacing: SunshiftSpacing.sm) {
+                        PlaceholderRoutineRow(
+                            icon: "sunrise.fill",
+                            color: SunshiftColors.sunrisePeach,
+                            title: "Morning Wind-Up",
+                            trigger: "At Sunrise"
+                        )
+                        PlaceholderRoutineRow(
+                            icon: "sun.max.fill",
+                            color: SunshiftColors.sunsetAmber,
+                            title: "Midday Check-In",
+                            trigger: "At Solar Noon"
+                        )
+                        PlaceholderRoutineRow(
+                            icon: "sunset.fill",
+                            color: SunshiftColors.duskPurple,
+                            title: "Evening Wind-Down",
+                            trigger: "30 min before Sunset"
+                        )
                     }
                     .padding(.horizontal)
 
-                    // CTA hint
                     Label("Routines are coming in Stage 1", systemImage: "clock")
-                        .font(SunshiftFont.caption())
-                        .foregroundStyle(.tertiary)
+                        .font(SunshiftTypography.caption())
+                        .foregroundStyle(SunshiftColors.secondaryText.opacity(0.6))
 
-                    Spacer(minLength: 40)
+                    Spacer(minLength: SunshiftSpacing.xl)
                 }
             }
+            .background(SunshiftColors.softBackground)
             .navigationTitle("Routines")
             .navigationBarTitleDisplayMode(.large)
         }
+        .background(SunshiftColors.softBackground)
     }
 }
 
@@ -49,25 +66,27 @@ private struct PlaceholderRoutineRow: View {
     let trigger: String
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: SunshiftSpacing.md) {
             Image(systemName: icon)
                 .font(.title2)
                 .foregroundStyle(color)
                 .frame(width: 36)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(SunshiftFont.headline())
+                    .font(SunshiftTypography.headline())
+                    .foregroundStyle(SunshiftColors.primaryText)
                 Text(trigger)
-                    .font(SunshiftFont.caption())
-                    .foregroundStyle(.secondary)
+                    .font(SunshiftTypography.caption())
+                    .foregroundStyle(SunshiftColors.secondaryText)
             }
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SunshiftColors.secondaryText.opacity(0.5))
         }
-        .padding(16)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
+        .padding(SunshiftSpacing.md)
+        .background(SunshiftColors.cardBackground, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
+        .cardShadow()
     }
 }
 

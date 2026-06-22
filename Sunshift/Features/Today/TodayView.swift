@@ -4,38 +4,61 @@ struct TodayView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 32) {
+                VStack(spacing: SunshiftSpacing.xl) {
                     // Hero
-                    VStack(spacing: 12) {
+                    VStack(spacing: SunshiftSpacing.sm) {
                         Image(systemName: "sun.max.fill")
                             .font(.system(size: 72))
-                            .foregroundStyle(SunshiftColor.sunrise)
+                            .foregroundStyle(SunshiftColors.sunrisePeach)
                             .symbolEffect(.pulse)
                         Text("Your Solar Day")
-                            .font(SunshiftFont.display())
+                            .font(SunshiftTypography.display())
+                            .foregroundStyle(SunshiftColors.primaryText)
                         Text("Sunrise, solar noon, and sunset — surfaced for where you are, right now.")
-                            .font(SunshiftFont.body())
-                            .foregroundStyle(.secondary)
+                            .font(SunshiftTypography.body())
+                            .foregroundStyle(SunshiftColors.secondaryText)
                             .multilineTextAlignment(.center)
                     }
-                    .padding(.top, 24)
+                    .padding(.top, SunshiftSpacing.lg)
                     .padding(.horizontal)
 
                     // Placeholder event cards
-                    VStack(spacing: 12) {
-                        PlaceholderEventRow(icon: "sunrise.fill", color: SunshiftColor.sunrise, label: "Sunrise", detail: "6:14 AM")
-                        PlaceholderEventRow(icon: "sun.max.fill", color: .yellow, label: "Solar Noon", detail: "1:02 PM")
-                        PlaceholderEventRow(icon: "sunset.fill", color: SunshiftColor.sunset, label: "Sunset", detail: "8:11 PM")
-                        PlaceholderEventRow(icon: "moon.stars.fill", color: SunshiftColor.sky, label: "Astronomical Twilight", detail: "9:48 PM")
+                    VStack(spacing: SunshiftSpacing.sm) {
+                        PlaceholderEventRow(
+                            icon: "sunrise.fill",
+                            color: SunshiftColors.sunrisePeach,
+                            label: "Sunrise",
+                            detail: "6:14 AM"
+                        )
+                        PlaceholderEventRow(
+                            icon: "sun.max.fill",
+                            color: SunshiftColors.sunsetAmber,
+                            label: "Solar Noon",
+                            detail: "1:02 PM"
+                        )
+                        PlaceholderEventRow(
+                            icon: "sunset.fill",
+                            color: SunshiftColors.sunsetAmber,
+                            label: "Sunset",
+                            detail: "8:11 PM"
+                        )
+                        PlaceholderEventRow(
+                            icon: "moon.stars.fill",
+                            color: SunshiftColors.duskPurple,
+                            label: "Astronomical Twilight",
+                            detail: "9:48 PM"
+                        )
                     }
                     .padding(.horizontal)
 
-                    Spacer(minLength: 40)
+                    Spacer(minLength: SunshiftSpacing.xl)
                 }
             }
+            .background(SunshiftColors.softBackground)
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.large)
         }
+        .background(SunshiftColors.softBackground)
     }
 }
 
@@ -46,20 +69,22 @@ private struct PlaceholderEventRow: View {
     let detail: String
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: SunshiftSpacing.md) {
             Image(systemName: icon)
                 .font(.title2)
                 .foregroundStyle(color)
                 .frame(width: 36)
             Text(label)
-                .font(SunshiftFont.headline())
+                .font(SunshiftTypography.headline())
+                .foregroundStyle(SunshiftColors.primaryText)
             Spacer()
             Text(detail)
-                .font(SunshiftFont.body())
-                .foregroundStyle(.secondary)
+                .font(SunshiftTypography.body())
+                .foregroundStyle(SunshiftColors.secondaryText)
         }
-        .padding(16)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
+        .padding(SunshiftSpacing.md)
+        .background(SunshiftColors.cardBackground, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
+        .cardShadow()
     }
 }
 

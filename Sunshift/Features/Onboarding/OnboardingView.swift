@@ -4,26 +4,30 @@ struct OnboardingView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        VStack(spacing: 32) {
-            Spacer()
-            Image(systemName: "sun.horizon.fill")
-                .font(.system(size: 96))
-                .foregroundStyle(SunshiftColor.sunrise)
-            VStack(spacing: 8) {
-                Text("Sunshift")
-                    .font(SunshiftFont.display(36))
-                Text("Live in sync with the sun.")
-                    .font(SunshiftFont.body())
-                    .foregroundStyle(.secondary)
+        ZStack {
+            SunshiftColors.softBackground.ignoresSafeArea()
+            VStack(spacing: SunshiftSpacing.xl) {
+                Spacer()
+                Image(systemName: "sun.horizon.fill")
+                    .font(.system(size: 96))
+                    .foregroundStyle(SunshiftGradients.sunrise)
+                VStack(spacing: SunshiftSpacing.sm) {
+                    Text("Sunshift")
+                        .font(SunshiftTypography.display(36))
+                        .foregroundStyle(SunshiftColors.primaryText)
+                    Text("Live in sync with the sun.")
+                        .font(SunshiftTypography.body())
+                        .foregroundStyle(SunshiftColors.secondaryText)
+                }
+                Spacer()
+                Button("Get Started") {
+                    appState.hasCompletedOnboarding = true
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
             }
-            Spacer()
-            Button("Get Started") {
-                appState.hasCompletedOnboarding = true
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .padding(SunshiftSpacing.xl)
         }
-        .padding(32)
     }
 }
 
