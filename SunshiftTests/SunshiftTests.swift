@@ -358,4 +358,222 @@ struct SunshiftTests {
         // Solar noon in local time should be between 11:00 and 13:00.
         #expect(hour >= 11 && hour <= 13)
     }
+
+    // MARK: - San Diego
+
+    @Test func sanDiegoSummerSunriseAndSunsetExist() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 32.7157, lon: -117.1611, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+        #expect(s.sunrise != nil)
+        #expect(s.sunset != nil)
+    }
+
+    @Test func sanDiegoWinterSunriseAndSunsetExist() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 12, day: 21,
+                            lat: 32.7157, lon: -117.1611, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+        #expect(s.sunrise != nil)
+        #expect(s.sunset != nil)
+    }
+
+    @Test func sanDiegoSummerEventOrdering() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 32.7157, lon: -117.1611, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+        let sr = try #require(s.sunrise)
+        let sn = try #require(s.solarNoon)
+        let ss = try #require(s.sunset)
+        #expect(sr < sn)
+        #expect(sn < ss)
+    }
+
+    @Test func sanDiegoWinterEventOrdering() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 12, day: 21,
+                            lat: 32.7157, lon: -117.1611, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+        let sr = try #require(s.sunrise)
+        let sn = try #require(s.solarNoon)
+        let ss = try #require(s.sunset)
+        #expect(sr < sn)
+        #expect(sn < ss)
+    }
+
+    @Test func sanDiegoSummerDaylightPositive() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 32.7157, lon: -117.1611, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+        let duration = try #require(s.daylightDuration)
+        #expect(duration > 0)
+    }
+
+    @Test func sanDiegoSummerDaylightLongerThanWinter() throws {
+        let svc = SunService()
+        let summerInp = try input(year: 2026, month: 6, day: 21,
+                                  lat: 32.7157, lon: -117.1611, tzID: "America/Los_Angeles")
+        let winterInp = try input(year: 2026, month: 12, day: 21,
+                                  lat: 32.7157, lon: -117.1611, tzID: "America/Los_Angeles")
+        let summer = try svc.sunSchedule(for: summerInp)
+        let winter = try svc.sunSchedule(for: winterInp)
+        let summerDuration = try #require(summer.daylightDuration)
+        let winterDuration = try #require(winter.daylightDuration)
+        #expect(summerDuration > winterDuration)
+    }
+
+    // MARK: - New York
+
+    @Test func newYorkSummerSunriseAndSunsetExist() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 40.7128, lon: -74.0060, tzID: "America/New_York")
+        let s = try svc.sunSchedule(for: inp)
+        #expect(s.sunrise != nil)
+        #expect(s.sunset != nil)
+    }
+
+    @Test func newYorkSummerEventOrdering() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 40.7128, lon: -74.0060, tzID: "America/New_York")
+        let s = try svc.sunSchedule(for: inp)
+        let sr = try #require(s.sunrise)
+        let sn = try #require(s.solarNoon)
+        let ss = try #require(s.sunset)
+        #expect(sr < sn)
+        #expect(sn < ss)
+    }
+
+    @Test func newYorkOrderedEventsChronological() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 40.7128, lon: -74.0060, tzID: "America/New_York")
+        let s = try svc.sunSchedule(for: inp)
+        let events = s.orderedEvents
+        #expect(!events.isEmpty)
+        for i in events.indices.dropLast() {
+            #expect(events[i].time <= events[i + 1].time)
+        }
+    }
+
+    @Test func newYorkNextEventAfterNoon() throws {
+        // At noon EDT there are still upcoming events: golden hour, sunset, etc.
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21, hour: 12,
+                            lat: 40.7128, lon: -74.0060, tzID: "America/New_York")
+        let s = try svc.sunSchedule(for: inp)
+        let next = try #require(s.nextEvent(after: inp.date))
+        #expect(next.time > inp.date)
+    }
+
+    // MARK: - Tokyo
+
+    @Test func tokyoSummerSunriseAndSunsetExist() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 35.6762, lon: 139.6503, tzID: "Asia/Tokyo")
+        let s = try svc.sunSchedule(for: inp)
+        #expect(s.sunrise != nil)
+        #expect(s.sunset != nil)
+    }
+
+    @Test func tokyoSummerEventOrdering() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 35.6762, lon: 139.6503, tzID: "Asia/Tokyo")
+        let s = try svc.sunSchedule(for: inp)
+        let sr = try #require(s.sunrise)
+        let sn = try #require(s.solarNoon)
+        let ss = try #require(s.sunset)
+        #expect(sr < sn)
+        #expect(sn < ss)
+    }
+
+    @Test func tokyoSunriseOnCorrectLocalDay() throws {
+        // Tokyo is UTC+9. The schedule is built for June 21 JST, so sunrise
+        // must also fall on June 21 when converted back to Asia/Tokyo.
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 35.6762, lon: 139.6503, tzID: "Asia/Tokyo")
+        let s = try svc.sunSchedule(for: inp)
+        let sr = try #require(s.sunrise)
+        let tz = try #require(TimeZone(identifier: "Asia/Tokyo"))
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tz
+        #expect(cal.component(.month, from: sr) == 6)
+        #expect(cal.component(.day,   from: sr) == 21)
+    }
+
+    @Test func tokyoOrderedEventsChronological() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 35.6762, lon: 139.6503, tzID: "Asia/Tokyo")
+        let s = try svc.sunSchedule(for: inp)
+        let events = s.orderedEvents
+        #expect(!events.isEmpty)
+        for i in events.indices.dropLast() {
+            #expect(events[i].time <= events[i + 1].time)
+        }
+    }
+
+    // MARK: - Joshua Tree
+
+    @Test func joshuaTreeSummerSunriseAndSunsetExist() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 34.1347, lon: -116.3131, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+        #expect(s.sunrise != nil)
+        #expect(s.sunset != nil)
+    }
+
+    @Test func joshuaTreeSummerEventOrdering() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 34.1347, lon: -116.3131, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+        let sr = try #require(s.sunrise)
+        let sn = try #require(s.solarNoon)
+        let ss = try #require(s.sunset)
+        #expect(sr < sn)
+        #expect(sn < ss)
+    }
+
+    @Test func joshuaTreeOrderedEventsChronological() throws {
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 34.1347, lon: -116.3131, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+        let events = s.orderedEvents
+        #expect(!events.isEmpty)
+        for i in events.indices.dropLast() {
+            #expect(events[i].time <= events[i + 1].time)
+        }
+    }
+
+    // MARK: - Tromso edge case
+
+    @Test func tromsoSummer2026DoesNotCrash() throws {
+        // Tromso, Norway (69.6492 N) on 2026-06-21. At this latitude, polar day
+        // is expected: the sun may never cross standard sunrise/sunset altitudes.
+        // The engine must not crash, solarNoon must be computable, and any events
+        // that are present must be in chronological order.
+        let svc = SunService()
+        let inp = try input(year: 2026, month: 6, day: 21,
+                            lat: 69.6492, lon: 18.9553, tzID: "Europe/Oslo")
+        let s = try svc.sunSchedule(for: inp)
+
+        // solarNoon is always computable because it does not depend on a crossing altitude.
+        #expect(s.solarNoon != nil)
+
+        // Whatever events are present, they must be chronological.
+        let events = s.orderedEvents
+        for i in events.indices.dropLast() {
+            #expect(events[i].time <= events[i + 1].time)
+        }
+    }
 }
