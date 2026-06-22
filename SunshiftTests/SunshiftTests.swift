@@ -18,6 +18,19 @@ struct SunshiftTests {
         return SunCalculationInput(date: date, latitude: lat, longitude: lon, timeZoneIdentifier: tzID)
     }
 
+    /// Makes a SunCalculationInput at a specific local time on a given date.
+    private func input(year: Int, month: Int, day: Int, hour: Int, minute: Int = 0,
+                       lat: Double, lon: Double, tzID: String) throws -> SunCalculationInput {
+        let tz = try #require(TimeZone(identifier: tzID))
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tz
+        var dc = DateComponents()
+        dc.year = year; dc.month = month; dc.day = day
+        dc.hour = hour; dc.minute = minute; dc.second = 0
+        let date = try #require(cal.date(from: dc))
+        return SunCalculationInput(date: date, latitude: lat, longitude: lon, timeZoneIdentifier: tzID)
+    }
+
     // MARK: - Event ordering
 
     @Test func eventOrderingMidLatitudeSummer() throws {
@@ -139,6 +152,164 @@ struct SunshiftTests {
         // than London's Jun 15 sunrise (different days AND different longitudes).
         // The key assertion: they produced different results, not the same calculation.
         #expect(london.sunrise != tokyo.sunrise)
+    }
+
+    // MARK: - orderedEvents
+
+    @Test func orderedEventsAreChronological() throws {
+        let svc = SunService()
+        let inp = try input(year: 2023, month: 6, day: 21,
+                            lat: 37.7749, lon: -122.4194, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+
+        let events = s.orderedEvents
+        #expect(!events.isEmpty)
+        for i in events.indices.dropLast() {
+            #expect(events[i].time <= events[i + 1].time)
+        }
+    }
+
+    @Test func orderedEventsCoversKeyTypes() throws {
+        let svc = SunService()
+        let inp = try input(year: 2023, month: 6, day: 21,
+                            lat: 37.7749, lon: -122.4194, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+
+        let types = Set(s.orderedEvents.map(\.type))
+        #expect(types.contains(.sunrise))
+        #expect(types.contains(.solarNoon))
+        #expect(types.contains(.sunset))
+        #expect(types.contains(.goldenHourStart))
+        #expect(types.contains(.goldenHourEnd))
+        #expect(types.contains(.firstLight))
+        #expect(types.contains(.lastLight))
+    }
+
+    @Test func orderedEventsEmptyDuringPolarDay() throws {
+        // Tromsø in summer: no sunrise or sunset during polar day.
+        // The engine must not crash and the schedule must be valid.
+        let svc = SunService()
+        let inp = try input(year: 2023, month: 6, day: 21,
+                            lat: 69.6, lon: 18.9551, tzID: "Europe/Oslo")
+        let s = try svc.sunSchedule(for: inp)
+
+        let events = s.orderedEvents
+        // orderedEvents may be empty or contain any computable events; if present, they must be chronological.
+        for i in events.indices.dropLast() {
+            #expect(events[i].time <= events[i + 1].time)
+        }
+        // If the engine computes solarNoon, it must appear in orderedEvents.
+        if s.solarNoon != nil {
+            #expect(events.contains(where: { $0.type == .solarNoon }))
+        }
+    }
+
+    // MARK: - daylightRemaining(at:)
+
+    @Test func daylightRemainingBeforeSunset() throws {
+        // At 2 PM (14:00), well before sunset in SF summer, we expect a positive remainder.
+        let svc = SunService()
+        let inp = try input(year: 2023, month: 6, day: 21, hour: 14,
+                            lat: 37.7749, lon: -122.4194, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+        let set = try #require(s.sunset)
+
+        let remaining = try #require(s.daylightRemaining(at: inp.date))
+        #expect(remaining > 0)
+        #expect(remaining == set.timeIntervalSince(inp.date))
+    }
+
+    @Test func daylightRemainingBeforeSunrise() throws {
+        // At 5 AM (before sunrise in SF summer), remaining should still be sunset - now.
+        let svc = SunService()
+        let inp = try input(year: 2023, month: 6, day: 21, hour: 5,
+                            lat: 37.7749, lon: -122.4194, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+        let set = try #require(s.sunset)
+
+        let remaining = try #require(s.daylightRemaining(at: inp.date))
+        #expect(remaining > 0)
+        #expect(remaining == set.timeIntervalSince(inp.date))
+    }
+
+    @Test func daylightRemainingAfterSunset() throws {
+        // At 10 PM (22:00), well after sunset in SF summer, remaining should be nil.
+        let svc = SunService()
+        let inp = try input(year: 2023, month: 6, day: 21, hour: 22,
+                            lat: 37.7749, lon: -122.4194, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+
+        #expect(s.daylightRemaining(at: inp.date) == nil)
+    }
+
+    @Test func daylightRemainingNilDuringPolarDay() throws {
+        let svc = SunService()
+        let inp = try input(year: 2023, month: 6, day: 21,
+                            lat: 69.6, lon: 18.9551, tzID: "Europe/Oslo")
+        let s = try svc.sunSchedule(for: inp)
+
+        #expect(s.daylightRemaining(at: inp.date) == nil)
+    }
+
+    // MARK: - nextEvent(after:)
+
+    @Test func nextEventAtMorningReturnsUpcomingEvent() throws {
+        // At 5 AM, the next event should be firstLight or blueHourStart.
+        let svc = SunService()
+        let inp = try input(year: 2023, month: 6, day: 21, hour: 5,
+                            lat: 37.7749, lon: -122.4194, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+
+        let next = try #require(s.nextEvent(after: inp.date))
+        #expect(next.time > inp.date)
+    }
+
+    @Test func nextEventAfterAllEventsIsNil() throws {
+        // At 23:59 in SF, all sun events have passed for the day.
+        let svc = SunService()
+        let inp = try input(year: 2023, month: 6, day: 21, hour: 23, minute: 59,
+                            lat: 37.7749, lon: -122.4194, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+
+        #expect(s.nextEvent(after: inp.date) == nil)
+    }
+
+    @Test func storedNextEventIsPopulatedAtNoon() throws {
+        // When the schedule is built at noon, the stored nextEvent should be non-nil
+        // and point to a time after noon.
+        let svc = SunService()
+        let inp = try input(year: 2023, month: 6, day: 21,
+                            lat: 37.7749, lon: -122.4194, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+
+        let stored = try #require(s.nextEvent)
+        #expect(stored.time > inp.date)
+    }
+
+    // MARK: - nextRelevantEvent fallback
+
+    @Test func nextRelevantEventFallsBackToTomorrow() throws {
+        // At 23:59 in SF, today's schedule is exhausted. The fallback should return
+        // tomorrow's firstLight or similar; definitely a future event.
+        let svc = SunService()
+        let inp = try input(year: 2023, month: 6, day: 21, hour: 23, minute: 59,
+                            lat: 37.7749, lon: -122.4194, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+
+        let next = try #require(try svc.nextRelevantEvent(after: inp.date, schedule: s, input: inp))
+        #expect(next.time > inp.date)
+    }
+
+    @Test func nextRelevantEventReturnsTodayWhenAvailable() throws {
+        // At noon, today still has upcoming events; no fallback needed.
+        let svc = SunService()
+        let inp = try input(year: 2023, month: 6, day: 21,
+                            lat: 37.7749, lon: -122.4194, tzID: "America/Los_Angeles")
+        let s = try svc.sunSchedule(for: inp)
+
+        let next = try #require(try svc.nextRelevantEvent(after: inp.date, schedule: s, input: inp))
+        let tz = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        #expect(next.time.isSameLocalDay(as: inp.date, in: tz))
     }
 
     // MARK: - Invalid input

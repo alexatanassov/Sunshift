@@ -107,12 +107,32 @@ struct SunService {
             daylightDuration = set.timeIntervalSince(rise)
         }
 
-        // Daylight remaining: non-nil only when input.date falls within [sunrise, sunset].
+        // Daylight remaining: non-nil when input.date is before sunset on the same local day.
         var daylightRemaining: TimeInterval? = nil
-        if let rise = sunrise, let set = sunset,
-           input.date >= rise, input.date <= set {
+        if let set = sunset,
+           input.date < set,
+           input.date.isSameLocalDay(as: set, in: timeZone) {
             daylightRemaining = set.timeIntervalSince(input.date)
         }
+
+        // Next scheduled event after input.date, using all events computed above.
+        let eventCandidates: [(SunEventType, Date?)] = [
+            (.firstLight,      firstLight),
+            (.blueHourStart,   blueHourStart),
+            (.sunrise,         sunrise),
+            (.goldenHourStart, goldenHourStart),
+            (.solarNoon,       solarNoon),
+            (.goldenHourEnd,   goldenHourEnd),
+            (.sunset,          sunset),
+            (.blueHourEnd,     blueHourEnd),
+            (.lastLight,       lastLight),
+        ]
+        let nextEvent: SunEvent? = eventCandidates
+            .compactMap { type, date -> SunEvent? in
+                guard let d = date, d > input.date else { return nil }
+                return SunEvent(type: type, time: d)
+            }
+            .min(by: { $0.time < $1.time })
 
         return SunSchedule(
             date: input.date,
@@ -131,7 +151,8 @@ struct SunService {
             civilTwilightStart: civilTwilightStart,
             civilTwilightEnd: civilTwilightEnd,
             daylightDuration: daylightDuration,
-            daylightRemaining: daylightRemaining
+            daylightRemaining: daylightRemaining,
+            nextEvent: nextEvent
         )
     }
 
