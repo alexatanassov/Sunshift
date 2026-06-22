@@ -1,14 +1,17 @@
 import Foundation
 
-struct SunEvent {
-    let date: Date
-    let sunrise: Date
-    let sunset: Date
+struct SunEvent: Identifiable, Codable, Equatable {
+    let id: UUID
+    let type: SunEventType
+    let time: Date
+    var subtitle: String?
 
-    var goldenHourMorning: DateInterval {
-        DateInterval(start: sunrise, duration: 3600)
-    }
-    var goldenHourEvening: DateInterval {
-        DateInterval(start: sunset.addingTimeInterval(-3600), duration: 3600)
+    var displayName: String { type.displayName }
+
+    init(id: UUID = UUID(), type: SunEventType, time: Date, subtitle: String? = nil) {
+        self.id = id
+        self.type = type
+        self.time = time
+        self.subtitle = subtitle
     }
 }

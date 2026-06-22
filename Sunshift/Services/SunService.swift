@@ -1,8 +1,8 @@
 import Foundation
 
-// Placeholder — real sun calculations added in a future stage
+// Placeholder — real sun calculations added in Stage 1
 struct SunService {
-    func sunEvent(for date: Date, latitude: Double, longitude: Double) -> SunEvent? {
-        nil
+    func sunSchedule(for input: SunCalculationInput) throws -> SunSchedule {
+        throw SunCalculationError.calculationFailed("Not implemented")
     }
 }
