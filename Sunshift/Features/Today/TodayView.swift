@@ -52,6 +52,15 @@ struct TodayView: View {
                     .padding(.horizontal)
 
                     Spacer(minLength: SunshiftSpacing.xl)
+
+                    #if DEBUG
+                    NavigationLink(destination: SolarDebugView()) {
+                        Text("Solar Debug")
+                            .font(SunshiftTypography.caption())
+                            .foregroundStyle(SunshiftColors.secondaryText.opacity(0.6))
+                    }
+                    .padding(.bottom, SunshiftSpacing.md)
+                    #endif
                 }
             }
             .background(SunshiftColors.softBackground)
