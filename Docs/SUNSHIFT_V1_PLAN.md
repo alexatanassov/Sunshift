@@ -97,6 +97,36 @@ Refer to `Sunshift/Design/DesignTokens.swift` for the implemented color and type
 
 ---
 
+## Stage 1: Solar Calculation Engine
+
+The on-device solar calculation engine was the first engineering milestone. It has no network dependency and runs entirely from `Foundation` and pure math.
+
+**Algorithm:** NOAA-style solar position using formulae from Jean Meeus, "Astronomical Algorithms" (2nd ed.). A Julian Day number anchors the target calendar date, a Julian Century from J2000.0 drives the orbital mechanics, and the resulting declination and equation of time are used to solve for event crossing times via the hour angle equation.
+
+**Timezone handling:** Calculations are anchored to the local calendar date in the given IANA timezone. The same UTC instant in different timezones can resolve to different local dates and will produce different schedules. DST transitions are handled transparently by `Foundation.Calendar`.
+
+**Outputs per day:** sunrise, sunset, solar noon, golden hour start/end, blue hour start/end, first light (civil dawn), last light (civil dusk), daylight duration, daylight remaining, and next event.
+
+**Polar handling:** When the sun never crosses an altitude threshold, that event is `nil`. Solar noon is always computable. The engine does not throw for polar conditions.
+
+**Approximations:**
+- Golden hour: sun between the horizon (-0.833 degrees) and +6 degrees altitude
+- Blue hour: sun between -4 and -6 degrees altitude
+
+These thresholds match common photographic usage and are intentionally fixed for predictability. They are not adaptive to atmospheric or seasonal variation.
+
+**Test coverage:** Unit tests run against five reference locations covering event ordering, daylight duration accuracy, polar edge cases, timezone correctness, next-event logic, and cross-midnight fallback:
+
+| Location | Timezone | Coverage |
+|---|---|---|
+| San Diego | America/Los_Angeles | Summer and winter solstice; event ordering; daylight duration |
+| New York | America/New_York | Event ordering; next-event logic |
+| Tokyo | Asia/Tokyo | Eastern hemisphere; local-day anchoring (UTC+9) |
+| Joshua Tree | America/Los_Angeles | Desert; event ordering |
+| Tromsø | Europe/Oslo | Polar day and polar night edge cases |
+
+---
+
 ## Post-1.0 Future Features
 
 These are not in scope for v1 but are worth keeping in mind to avoid closing off architectural doors.
