@@ -13,7 +13,7 @@ struct RoutinesView: View {
                         Text("Solar Routines")
                             .font(SunshiftTypography.display())
                             .foregroundStyle(SunshiftColors.primaryText)
-                        Text("Create habits that fire at sunrise, sunset, or any solar milestone — every day, automatically.")
+                        Text("Set a routine around sunrise, sunset, or any solar milestone. The timing shifts with the seasons.")
                             .font(SunshiftTypography.body())
                             .foregroundStyle(SunshiftColors.secondaryText)
                             .multilineTextAlignment(.center)

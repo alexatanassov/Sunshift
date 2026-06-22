@@ -27,25 +27,25 @@ struct PlusView: View {
                             icon: "bell.badge.fill",
                             color: SunshiftColors.sunrisePeach,
                             title: "Unlimited Routines",
-                            detail: "Free tier is limited to 2 active routines"
+                            detail: "Free tier includes 1 active routine"
                         )
                         PlusFeatureRow(
                             icon: "location.fill",
                             color: SunshiftColors.sunsetAmber,
-                            title: "Unlimited Locations",
-                            detail: "Pin as many places as you need"
+                            title: "Saved Locations",
+                            detail: "Pin home, office, or anywhere you spend time"
                         )
                         PlusFeatureRow(
-                            icon: "chart.line.uptrend.xyaxis",
+                            icon: "calendar",
                             color: SunshiftColors.duskPurple,
-                            title: "Solar History",
-                            detail: "Day-length trends and seasonal insights"
+                            title: "7-Day Light Preview",
+                            detail: "See sunrise and sunset times for the week ahead"
                         )
                         PlusFeatureRow(
                             icon: "app.badge.fill",
                             color: SunshiftColors.nightNavy,
                             title: "Home Screen Widgets",
-                            detail: "Live sunrise and sunset right on your home screen"
+                            detail: "Your next sun event, glanceable on the home screen"
                         )
                     }
                     .padding(.horizontal)

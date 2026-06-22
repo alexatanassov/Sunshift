@@ -14,7 +14,7 @@ struct TodayView: View {
                         Text("Your Solar Day")
                             .font(SunshiftTypography.display())
                             .foregroundStyle(SunshiftColors.primaryText)
-                        Text("Sunrise, solar noon, and sunset — surfaced for where you are, right now.")
+                        Text("Sunrise, solar noon, and sunset. Updated for where you are.")
                             .font(SunshiftTypography.body())
                             .foregroundStyle(SunshiftColors.secondaryText)
                             .multilineTextAlignment(.center)

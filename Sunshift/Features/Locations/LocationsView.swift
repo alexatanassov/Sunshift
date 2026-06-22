@@ -13,7 +13,7 @@ struct LocationsView: View {
                         Text("Your Locations")
                             .font(SunshiftTypography.display())
                             .foregroundStyle(SunshiftColors.primaryText)
-                        Text("Pin the places that matter — home, office, a favourite trail — and get accurate solar times for each one.")
+                        Text("Save the places you care about. Solar times update automatically for each one.")
                             .font(SunshiftTypography.body())
                             .foregroundStyle(SunshiftColors.secondaryText)
                             .multilineTextAlignment(.center)
