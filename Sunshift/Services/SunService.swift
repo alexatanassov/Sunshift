@@ -32,12 +32,10 @@ struct SunService {
         // 2. Build UTC midnight for this calendar date.
         //    The NOAA algorithm expresses all event times as "minutes from UTC midnight"
         //    for the target calendar date, so this is the anchor for Date conversion.
-        var utcCal = Calendar(identifier: .gregorian)
-        utcCal.timeZone = TimeZone(identifier: "UTC")!
-        var utcDC = DateComponents()
-        utcDC.year = year; utcDC.month = month; utcDC.day = day
-        utcDC.hour = 0; utcDC.minute = 0; utcDC.second = 0
-        guard let utcMidnight = utcCal.date(from: utcDC) else {
+        guard let utcMidnight = Date.localDate(
+            year: year, month: month, day: day,
+            timeZone: TimeZone(identifier: "UTC")!
+        ) else {
             throw SunCalculationError.calculationFailed("Could not create UTC midnight")
         }
 
