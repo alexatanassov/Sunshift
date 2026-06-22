@@ -29,4 +29,6 @@ enum FreeTierLimits {
     static let maxActiveRoutines = 1
     static let allowedTemplates: [RoutineTemplate] = [.sunsetWalk]
     static let previewDays = 0
+    // Free users may save one home/manual location in addition to current location.
+    static let maxSavedLocations = 1
 }

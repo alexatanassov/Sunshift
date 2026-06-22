@@ -24,6 +24,12 @@ final class SubscriptionService {
     var canUseCustomNotificationMessages: Bool { isPlusUser }
     var canUseWidgets: Bool { isPlusUser }
     var canUse7DayPreview: Bool { isPlusUser }
+    // Free tier allows one saved home/manual location; Plus has no limit.
+    // Pass the count of non-current saved locations to check against the free limit.
+    func canAddSavedLocation(currentNonCurrentCount: Int) -> Bool {
+        if isPlusUser { return true }
+        return currentNonCurrentCount < FreeTierLimits.maxSavedLocations
+    }
 
     func canUseTemplate(_ template: RoutineTemplate) -> Bool {
         !template.requiresPlus || isPlusUser
