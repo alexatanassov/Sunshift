@@ -1,7 +1,37 @@
 import SwiftUI
 
 struct TodayView: View {
+    @Environment(LocationViewModel.self) private var locationViewModel
+
+    private var resolvedLocation: SavedLocation { locationViewModel.resolvedLocation }
+
+    private var tz: TimeZone {
+        TimeZone(identifier: resolvedLocation.timeZoneIdentifier) ?? .current
+    }
+
+    private var todaySchedule: SunSchedule? {
+        let location = resolvedLocation
+        let tzId = location.timeZoneIdentifier
+        let tz = TimeZone(identifier: tzId) ?? .current
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tz
+        let today = cal.startOfDay(for: Date())
+        let input = SunCalculationInput(
+            date: today,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            timeZoneIdentifier: tzId
+        )
+        return try? SunService().sunSchedule(for: input)
+    }
+
+    private func timeString(for date: Date?) -> String {
+        guard let date else { return "N/A" }
+        return date.formattedTime(in: tz)
+    }
+
     var body: some View {
+        let schedule = todaySchedule
         NavigationStack {
             ScrollView {
                 VStack(spacing: SunshiftSpacing.xl) {
@@ -14,39 +44,38 @@ struct TodayView: View {
                         Text("Your Solar Day")
                             .font(SunshiftTypography.display())
                             .foregroundStyle(SunshiftColors.primaryText)
-                        Text("Sunrise, solar noon, and sunset. Updated for where you are.")
-                            .font(SunshiftTypography.body())
+                        Text(resolvedLocation.name)
+                            .font(SunshiftTypography.caption())
                             .foregroundStyle(SunshiftColors.secondaryText)
-                            .multilineTextAlignment(.center)
                     }
                     .padding(.top, SunshiftSpacing.lg)
                     .padding(.horizontal)
 
-                    // Placeholder event cards
+                    // Solar event cards
                     VStack(spacing: SunshiftSpacing.sm) {
-                        PlaceholderEventRow(
+                        SolarEventRow(
                             icon: "sunrise.fill",
                             color: SunshiftColors.sunrisePeach,
                             label: "Sunrise",
-                            detail: "6:14 AM"
+                            detail: timeString(for: schedule?.sunrise)
                         )
-                        PlaceholderEventRow(
+                        SolarEventRow(
                             icon: "sun.max.fill",
                             color: SunshiftColors.sunsetAmber,
                             label: "Solar Noon",
-                            detail: "1:02 PM"
+                            detail: timeString(for: schedule?.solarNoon)
                         )
-                        PlaceholderEventRow(
+                        SolarEventRow(
                             icon: "sunset.fill",
                             color: SunshiftColors.sunsetAmber,
                             label: "Sunset",
-                            detail: "8:11 PM"
+                            detail: timeString(for: schedule?.sunset)
                         )
-                        PlaceholderEventRow(
+                        SolarEventRow(
                             icon: "moon.stars.fill",
                             color: SunshiftColors.duskPurple,
-                            label: "Astronomical Twilight",
-                            detail: "9:48 PM"
+                            label: "Last Light",
+                            detail: timeString(for: schedule?.lastLight)
                         )
                     }
                     .padding(.horizontal)
@@ -71,7 +100,7 @@ struct TodayView: View {
     }
 }
 
-private struct PlaceholderEventRow: View {
+private struct SolarEventRow: View {
     let icon: String
     let color: Color
     let label: String
@@ -90,6 +119,7 @@ private struct PlaceholderEventRow: View {
             Text(detail)
                 .font(SunshiftTypography.body())
                 .foregroundStyle(SunshiftColors.secondaryText)
+                .monospacedDigit()
         }
         .padding(SunshiftSpacing.md)
         .background(SunshiftColors.cardBackground, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
@@ -99,4 +129,5 @@ private struct PlaceholderEventRow: View {
 
 #Preview {
     TodayView()
+        .environment(LocationViewModel(subscriptionService: SubscriptionService()))
 }

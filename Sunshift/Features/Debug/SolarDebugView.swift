@@ -2,55 +2,58 @@
 import SwiftUI
 
 struct SolarDebugView: View {
-    private static let sanDiego = SunCalculationInput(
-        date: Date(),
-        latitude: 32.7157,
-        longitude: -117.1611,
-        timeZoneIdentifier: "America/Los_Angeles"
-    )
+    @Environment(LocationViewModel.self) private var locationViewModel
 
-    private let result: Result<SunSchedule, Error> = {
-        let tz = TimeZone(identifier: "America/Los_Angeles")!
+    private var resolvedLocation: SavedLocation { locationViewModel.resolvedLocation }
+    private var isFallback: Bool { locationViewModel.isUsingFallback }
+
+    private var tz: TimeZone {
+        TimeZone(identifier: resolvedLocation.timeZoneIdentifier) ?? .current
+    }
+
+    private var result: Result<SunSchedule, Error> {
+        let location = resolvedLocation
+        let tzId = location.timeZoneIdentifier
+        let tz = TimeZone(identifier: tzId) ?? .current
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
         let today = cal.startOfDay(for: Date())
         let input = SunCalculationInput(
             date: today,
-            latitude: 32.7157,
-            longitude: -117.1611,
-            timeZoneIdentifier: "America/Los_Angeles"
+            latitude: location.latitude,
+            longitude: location.longitude,
+            timeZoneIdentifier: tzId
         )
         return Result { try SunService().sunSchedule(for: input) }
-    }()
-
-    private var tz: TimeZone { TimeZone(identifier: "America/Los_Angeles")! }
+    }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch result {
-                case .success(let schedule):
-                    scheduleList(schedule)
-                case .failure(let error):
-                    ContentUnavailableView(
-                        "Calculation Failed",
-                        systemImage: "exclamationmark.triangle",
-                        description: Text(error.localizedDescription)
-                    )
-                }
+        Group {
+            switch result {
+            case .success(let schedule):
+                scheduleList(schedule)
+            case .failure(let error):
+                ContentUnavailableView(
+                    "Calculation Failed",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(error.localizedDescription)
+                )
             }
-            .navigationTitle("Solar Debug")
-            .navigationBarTitleDisplayMode(.inline)
-            .background(SunshiftColors.softBackground)
         }
+        .navigationTitle("Solar Debug")
+        .navigationBarTitleDisplayMode(.inline)
+        .background(SunshiftColors.softBackground)
     }
 
     @ViewBuilder
     private func scheduleList(_ s: SunSchedule) -> some View {
         let now = Date()
+        let locationName = isFallback
+            ? "\(resolvedLocation.name) (Fallback)"
+            : resolvedLocation.name
         List {
             Section("Location") {
-                debugRow(label: "Name", value: "San Diego, CA")
+                debugRow(label: "Name", value: locationName)
                 debugRow(label: "Latitude", value: String(format: "%.4f", s.latitude))
                 debugRow(label: "Longitude", value: String(format: "%.4f", s.longitude))
                 debugRow(label: "Timezone", value: s.timeZoneIdentifier)
@@ -126,6 +129,9 @@ struct SolarDebugView: View {
 }
 
 #Preview {
-    SolarDebugView()
+    NavigationStack {
+        SolarDebugView()
+            .environment(LocationViewModel(subscriptionService: SubscriptionService()))
+    }
 }
 #endif
