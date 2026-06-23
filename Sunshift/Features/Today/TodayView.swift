@@ -16,6 +16,7 @@ struct TodayView: View {
                             TodayTimelineView(schedule: schedule, now: Date())
                         }
                         EventsSection(viewModel: viewModel)
+                        NextRoutineCard(viewModel: viewModel)
                     }
 
                     #if DEBUG
@@ -228,6 +229,55 @@ private struct EventRow: View {
         }
         .padding(.horizontal, SunshiftSpacing.md)
         .padding(.vertical, 14)
+    }
+}
+
+// MARK: - Next Routine Card
+
+private struct NextRoutineCard: View {
+    let viewModel: TodayViewModel
+
+    private var timeDetail: String {
+        if let t = viewModel.sunsetWalkTimeText {
+            return "30 min before sunset (\(t))"
+        }
+        return "30 minutes before sunset"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
+            Text("Next routine")
+                .font(SunshiftTypography.caption())
+                .foregroundStyle(SunshiftColors.secondaryText)
+                .textCase(.uppercase)
+                .kerning(0.5)
+
+            HStack(alignment: .top, spacing: SunshiftSpacing.md) {
+                Image(systemName: "figure.walk")
+                    .font(.title2)
+                    .foregroundStyle(SunshiftColors.sunsetAmber)
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
+                    Text("Sunset Walk")
+                        .font(SunshiftTypography.headline())
+                        .foregroundStyle(SunshiftColors.primaryText)
+                    Text(timeDetail)
+                        .font(SunshiftTypography.body())
+                        .foregroundStyle(SunshiftColors.secondaryText)
+                        .monospacedDigit()
+                }
+            }
+
+            Text("Routine scheduling comes next.")
+                .font(SunshiftTypography.caption())
+                .foregroundStyle(SunshiftColors.secondaryText.opacity(0.7))
+                .padding(.top, SunshiftSpacing.xs)
+        }
+        .padding(SunshiftSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SunshiftColors.cardBackground, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
+        .cardShadow()
     }
 }
 

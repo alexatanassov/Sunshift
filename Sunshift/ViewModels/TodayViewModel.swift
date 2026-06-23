@@ -31,6 +31,8 @@ final class TodayViewModel {
     private(set) var nextEventTitle: String? = nil
     private(set) var nextEventCountdownText: String? = nil
 
+    private(set) var sunsetWalkTimeText: String? = nil
+
     private(set) var isLoading: Bool = false
     private(set) var errorMessage: String? = nil
 
@@ -74,6 +76,7 @@ final class TodayViewModel {
             lastLightText  = s.lastLight.map     { $0.formattedTime(in: tz) } ?? "--"
 
             daylightRemainingText = s.daylightRemaining(at: now).map { $0.formattedDaylightRemaining }
+            sunsetWalkTimeText = s.sunset.map { ($0 - 30 * 60).formattedTime(in: tz) }
 
             let nextEvent = try sunService.nextRelevantEvent(after: now, schedule: s, input: input)
             nextEventTitle        = nextEvent?.displayName
@@ -104,5 +107,6 @@ final class TodayViewModel {
         daylightRemainingText  = nil
         nextEventTitle         = nil
         nextEventCountdownText = nil
+        sunsetWalkTimeText     = nil
     }
 }
