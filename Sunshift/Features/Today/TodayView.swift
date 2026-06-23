@@ -8,16 +8,7 @@ struct TodayView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: SunshiftSpacing.xl) {
-                    if let error = viewModel.errorMessage {
-                        TodayErrorView(message: error, onRetry: refresh)
-                    } else {
-                        HeroCard(viewModel: viewModel)
-                        if let schedule = viewModel.schedule {
-                            TodayTimelineView(schedule: schedule, now: Date())
-                        }
-                        EventsSection(viewModel: viewModel)
-                        NextRoutineCard(viewModel: viewModel)
-                    }
+                    mainContent
 
                     #if DEBUG
                     NavigationLink(destination: SolarDebugView()) {
@@ -41,11 +32,75 @@ struct TodayView: View {
         .onChange(of: locationViewModel.resolvedLocation.id) { refresh() }
     }
 
+    @ViewBuilder
+    private var mainContent: some View {
+        if locationViewModel.activeLocation == nil {
+            TodayEmptyLocationView()
+        } else if !viewModel.hasRefreshed {
+            TodayLoadingView()
+        } else if let error = viewModel.errorMessage {
+            TodayErrorView(message: error, onRetry: refresh)
+        } else {
+            HeroCard(viewModel: viewModel)
+            if let schedule = viewModel.schedule {
+                TodayTimelineView(schedule: schedule, now: Date())
+            }
+            EventsSection(viewModel: viewModel)
+            NextRoutineCard(viewModel: viewModel)
+        }
+    }
+
     private func refresh() {
         viewModel.refresh(
             location: locationViewModel.resolvedLocation,
             isUsingFallback: locationViewModel.isUsingFallback
         )
+    }
+}
+
+// MARK: - Empty Location State
+
+private struct TodayEmptyLocationView: View {
+    var body: some View {
+        VStack(spacing: SunshiftSpacing.md) {
+            Spacer(minLength: SunshiftSpacing.xxl)
+
+            Image(systemName: "sun.horizon.fill")
+                .font(.system(size: 52))
+                .foregroundStyle(SunshiftColors.sunsetAmber)
+
+            VStack(spacing: SunshiftSpacing.xs) {
+                Text("Your light schedule starts here")
+                    .font(SunshiftTypography.headline())
+                    .foregroundStyle(SunshiftColors.primaryText)
+                    .multilineTextAlignment(.center)
+
+                Text("Add a city or use your current location in the Locations tab.")
+                    .font(SunshiftTypography.body())
+                    .foregroundStyle(SunshiftColors.secondaryText)
+                    .multilineTextAlignment(.center)
+            }
+
+            Spacer(minLength: SunshiftSpacing.xxl)
+        }
+        .padding(.horizontal, SunshiftSpacing.xl)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("No location set. Add a city or use your current location in the Locations tab.")
+    }
+}
+
+// MARK: - Loading State
+
+private struct TodayLoadingView: View {
+    var body: some View {
+        VStack {
+            Spacer(minLength: SunshiftSpacing.xxl)
+            ProgressView()
+                .tint(SunshiftColors.sunsetAmber)
+                .scaleEffect(1.2)
+            Spacer(minLength: SunshiftSpacing.xxl)
+        }
+        .accessibilityLabel("Loading your light schedule")
     }
 }
 
@@ -56,7 +111,6 @@ private struct HeroCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Countdown + hint
             VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
                 countdownText
                 Text(hint)
@@ -66,13 +120,11 @@ private struct HeroCard: View {
 
             Spacer(minLength: SunshiftSpacing.lg)
 
-            // Separator
             Rectangle()
                 .fill(.white.opacity(0.25))
                 .frame(height: 1)
                 .padding(.bottom, SunshiftSpacing.sm)
 
-            // Daylight remaining + location
             HStack(alignment: .center) {
                 daylightLabel
                 Spacer()
@@ -83,6 +135,8 @@ private struct HeroCard: View {
         .frame(minHeight: 200)
         .background(heroGradient, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.large))
         .cardShadow()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(heroAccessibilityLabel)
     }
 
     @ViewBuilder
@@ -90,6 +144,10 @@ private struct HeroCard: View {
         if viewModel.isLoading {
             ProgressView()
                 .tint(.white)
+        } else if viewModel.isPolarNight {
+            Text("Night all day")
+                .font(SunshiftTypography.display(28))
+                .foregroundStyle(.white.opacity(0.75))
         } else if let title = viewModel.nextEventTitle,
                   let countdown = viewModel.nextEventCountdownText {
             Text("\(title) \(countdown)")
@@ -108,7 +166,15 @@ private struct HeroCard: View {
 
     @ViewBuilder
     private var daylightLabel: some View {
-        if let daylight = viewModel.daylightRemainingText {
+        if viewModel.isPolarDay {
+            Text("Daylight all day")
+                .font(SunshiftTypography.headline())
+                .foregroundStyle(.white)
+        } else if viewModel.isPolarNight {
+            Text("No daylight today")
+                .font(SunshiftTypography.headline())
+                .foregroundStyle(.white.opacity(0.65))
+        } else if let daylight = viewModel.daylightRemainingText {
             Text("\(daylight) of daylight left")
                 .font(SunshiftTypography.headline())
                 .foregroundStyle(.white)
@@ -141,11 +207,15 @@ private struct HeroCard: View {
     }
 
     private var heroGradient: LinearGradient {
-        viewModel.daylightRemainingText != nil ? SunshiftGradients.sunrise : SunshiftGradients.dusk
+        if viewModel.isPolarNight { return SunshiftGradients.night }
+        if viewModel.isPolarDay || viewModel.daylightRemainingText != nil { return SunshiftGradients.sunrise }
+        return SunshiftGradients.dusk
     }
 
     private var hint: String {
         guard viewModel.schedule != nil else { return "Finding your light." }
+        if viewModel.isPolarDay   { return "The sun is with you all day." }
+        if viewModel.isPolarNight { return "A quiet day here without the sun." }
         switch viewModel.nextEventTitle {
         case "First Light":       return "The sky is beginning to brighten."
         case "Blue Hour Start":   return "A calm blue light this morning."
@@ -159,6 +229,26 @@ private struct HeroCard: View {
         default:                  return "Rest well."
         }
     }
+
+    private var heroAccessibilityLabel: String {
+        var parts: [String] = []
+        if viewModel.isPolarDay {
+            parts.append("Daylight all day")
+        } else if viewModel.isPolarNight {
+            parts.append("Night all day")
+        } else if let title = viewModel.nextEventTitle, let countdown = viewModel.nextEventCountdownText {
+            parts.append("\(title) \(countdown)")
+        } else if viewModel.schedule != nil {
+            parts.append("All done for today")
+        }
+        if let daylight = viewModel.daylightRemainingText {
+            parts.append("\(daylight) of daylight left")
+        } else if !viewModel.isPolarDay && !viewModel.isPolarNight {
+            parts.append("Sun has set")
+        }
+        parts.append("Location: \(viewModel.locationDisplayName)")
+        return parts.joined(separator: ". ")
+    }
 }
 
 // MARK: - Events Section
@@ -168,36 +258,70 @@ private struct EventsSection: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            EventRow(
-                icon: "sunrise.fill",
-                color: SunshiftColors.sunrisePeach,
-                label: "Sunrise",
-                detail: viewModel.sunriseText
-            )
-            rowDivider
-            EventRow(
-                icon: "sunset.fill",
-                color: SunshiftColors.sunsetAmber,
-                label: "Sunset",
-                detail: viewModel.sunsetText
-            )
-            rowDivider
-            EventRow(
-                icon: "sun.max.fill",
-                color: SunshiftColors.sunsetAmber,
-                label: "Golden Hour",
-                detail: viewModel.goldenHourText
-            )
-            rowDivider
-            EventRow(
-                icon: "moon.stars.fill",
-                color: SunshiftColors.duskPurple,
-                label: "Last Light",
-                detail: viewModel.lastLightText
-            )
+            if viewModel.isPolarDay || viewModel.isPolarNight {
+                polarRow
+                rowDivider
+                EventRow(
+                    icon: "sun.max.fill",
+                    color: SunshiftColors.sunsetAmber,
+                    label: "Golden Hour",
+                    detail: viewModel.goldenHourText
+                )
+                rowDivider
+                EventRow(
+                    icon: "moon.stars.fill",
+                    color: SunshiftColors.duskPurple,
+                    label: "Last Light",
+                    detail: viewModel.lastLightText
+                )
+            } else {
+                EventRow(
+                    icon: "sunrise.fill",
+                    color: SunshiftColors.sunrisePeach,
+                    label: "Sunrise",
+                    detail: viewModel.sunriseText
+                )
+                rowDivider
+                EventRow(
+                    icon: "sunset.fill",
+                    color: SunshiftColors.sunsetAmber,
+                    label: "Sunset",
+                    detail: viewModel.sunsetText
+                )
+                rowDivider
+                EventRow(
+                    icon: "sun.max.fill",
+                    color: SunshiftColors.sunsetAmber,
+                    label: "Golden Hour",
+                    detail: viewModel.goldenHourText
+                )
+                rowDivider
+                EventRow(
+                    icon: "moon.stars.fill",
+                    color: SunshiftColors.duskPurple,
+                    label: "Last Light",
+                    detail: viewModel.lastLightText
+                )
+            }
         }
         .background(SunshiftColors.cardBackground, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
         .cardShadow()
+    }
+
+    private var polarRow: some View {
+        let isPolarNight = viewModel.isPolarNight
+        return HStack(spacing: SunshiftSpacing.md) {
+            Image(systemName: isPolarNight ? "moon.stars.fill" : "sun.max.fill")
+                .font(.title3)
+                .foregroundStyle(isPolarNight ? SunshiftColors.duskPurple : SunshiftColors.sunsetAmber)
+                .frame(width: 24)
+            Text(isPolarNight ? "No sunrise today" : "The sun doesn't set today")
+                .font(SunshiftTypography.body())
+                .foregroundStyle(SunshiftColors.primaryText)
+            Spacer()
+        }
+        .padding(.horizontal, SunshiftSpacing.md)
+        .padding(.vertical, 14)
     }
 
     private var rowDivider: some View {
@@ -229,6 +353,8 @@ private struct EventRow: View {
         }
         .padding(.horizontal, SunshiftSpacing.md)
         .padding(.vertical, 14)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label): \(detail)")
     }
 }
 
@@ -290,9 +416,9 @@ private struct TodayErrorView: View {
     var body: some View {
         VStack(spacing: SunshiftSpacing.lg) {
             Spacer(minLength: SunshiftSpacing.xxl)
-            Image(systemName: "exclamationmark.circle")
+            Image(systemName: "sun.haze.fill")
                 .font(.system(size: 44))
-                .foregroundStyle(SunshiftColors.secondaryText)
+                .foregroundStyle(SunshiftColors.sunsetAmber.opacity(0.6))
             Text(message)
                 .font(SunshiftTypography.body())
                 .foregroundStyle(SunshiftColors.secondaryText)

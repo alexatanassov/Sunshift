@@ -238,6 +238,52 @@ struct TodayViewModelTests {
 
     // MARK: Repeated refresh
 
+    // MARK: Polar state
+
+    @Test func isPolarDay_trueForHighLatitudeSummer() throws {
+        let vm = TodayViewModel()
+        let location = makeSavedLocation(latitude: 69.6492, longitude: 18.9553, tzID: "Europe/Oslo")
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "Europe/Oslo")
+        vm.refresh(location: location, isUsingFallback: false, now: now)
+        #expect(vm.isPolarDay == true)
+        #expect(vm.isPolarNight == false)
+        #expect(vm.errorMessage == nil)
+    }
+
+    @Test func isPolarDay_falseForMidLatitudeSummer() throws {
+        let vm = TodayViewModel()
+        let location = makeSavedLocation()
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "America/Los_Angeles")
+        vm.refresh(location: location, isUsingFallback: false, now: now)
+        #expect(vm.isPolarDay == false)
+        #expect(vm.isPolarNight == false)
+    }
+
+    // MARK: hasRefreshed
+
+    @Test func hasRefreshed_falseBeforeRefresh() {
+        let vm = TodayViewModel()
+        #expect(vm.hasRefreshed == false)
+    }
+
+    @Test func hasRefreshed_trueAfterSuccessfulRefresh() throws {
+        let vm = TodayViewModel()
+        let location = makeSavedLocation()
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "America/Los_Angeles")
+        vm.refresh(location: location, isUsingFallback: false, now: now)
+        #expect(vm.hasRefreshed == true)
+    }
+
+    @Test func hasRefreshed_trueAfterFailedRefresh() {
+        let vm = TodayViewModel()
+        let badLocation = makeSavedLocation(latitude: 200, longitude: 0)
+        vm.refresh(location: badLocation, isUsingFallback: false, now: Date())
+        #expect(vm.hasRefreshed == true)
+        #expect(vm.errorMessage != nil)
+    }
+
+    // MARK: Repeated refresh
+
     @Test func secondRefresh_clearsStaleSchedule() throws {
         let vm = TodayViewModel()
         let location = makeSavedLocation()

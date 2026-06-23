@@ -35,6 +35,19 @@ final class TodayViewModel {
 
     private(set) var isLoading: Bool = false
     private(set) var errorMessage: String? = nil
+    private(set) var hasRefreshed: Bool = false
+
+    // True when the active schedule has no sunrise or sunset (polar day or polar night).
+    // isPolarNight is currently unreachable because SunService always produces a solarNoon.
+    var isPolarDay: Bool {
+        guard let s = schedule else { return false }
+        return s.sunrise == nil && s.sunset == nil && s.solarNoon != nil
+    }
+
+    var isPolarNight: Bool {
+        guard let s = schedule else { return false }
+        return s.sunrise == nil && s.sunset == nil && s.solarNoon == nil
+    }
 
     // MARK: - Dependencies
 
@@ -87,6 +100,8 @@ final class TodayViewModel {
             clearScheduleState()
             errorMessage = "Could not load today's sun schedule. Try again shortly."
         }
+
+        hasRefreshed = true
     }
 
     // MARK: - Private
