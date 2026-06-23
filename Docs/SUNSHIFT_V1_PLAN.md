@@ -127,6 +127,81 @@ These thresholds match common photographic usage and are intentionally fixed for
 
 ---
 
+## Stage 2: Location System
+
+Stage 2 wires the device to the solar engine. `TodayView` now feeds real coordinates into `SunService` so every solar time shown in the app reflects where the user actually is.
+
+### Why the app asks for location
+
+The solar calculation engine needs latitude, longitude, and a timezone identifier. Without real coordinates, Sunshift falls back to San Diego so the UI never displays blank values, but the fallback is clearly labelled in the interface.
+
+### What location is used for
+
+- Supplying `latitude`, `longitude`, and `timeZoneIdentifier` to `SunCalculationInput` on every call to `SunService.sunSchedule(for:)`
+- Reverse geocoding GPS coordinates into a display name and a confirmed IANA timezone identifier
+
+### What is stored locally
+
+All location data stays on the device in `UserDefaults`. No server receives any location information.
+
+| Key | Content |
+|---|---|
+| `sunshift.savedLocations` | JSON-encoded `[SavedLocation]` array |
+| `sunshift.activeLocationID` | UUID string of the active location |
+
+### Current location support
+
+`DeviceLocationService` wraps `CLLocationManager`. It requests `whenInUse` permission and calls `requestLocation()` for a single GPS fix, bridged to Swift Concurrency via `CheckedContinuation`. The fix is then reverse-geocoded by `LocationGeocodingService` (`CLGeocoder`) to resolve city, state, and timezone. The result is saved to `LocationStore` and set as the active location. Only one current-location entry is kept at a time; the previous one is removed before the new one is added.
+
+### Manual fallback location support
+
+`ManualLocationEntryView` accepts a location name, latitude, longitude, and IANA timezone identifier. The form validates coordinates and the timezone string before the Save button becomes active. Example buttons pre-fill San Diego, New York, and London. On save the location is persisted and set as the active location immediately.
+
+### Active location state
+
+`LocationStore` stores the active location ID in `UserDefaults`. On app launch the store rehydrates the saved list and resolves the stored ID back to a `SavedLocation`. `LocationViewModel.resolvedLocation` always returns a valid location -- the San Diego dev fallback when nothing has been set -- so `SunService` always has coordinates to work with. `isUsingFallback` flags when the resolved location is the placeholder so the UI can surface a badge rather than silently showing San Diego data as real.
+
+### Saved location foundation
+
+`LocationStore` manages a `[SavedLocation]` array. Each entry carries a `LocationSource` (.current, .manual, .saved, .searchResult, .fallback), `isCurrentLocation`, and `isHomeLocation` flags, and created/updated timestamps. The store is `@Observable` so views update automatically when the list or active selection changes.
+
+### Free vs Plus location foundation
+
+| Capability | Free | Plus |
+|---|---|---|
+| Current location (GPS) | Yes | Yes |
+| Manual location entry | 1 saved location | Unlimited |
+| Saved location list | 1 non-current entry | Unlimited |
+
+`FreeTierLimits.maxSavedLocations = 1` (in `SubscriptionTier.swift`) is the single source of truth. `LocationStore.canAddSavedLocation(tier:)` and `LocationViewModel.canAddManualLocation` expose the gate; the UI reads from these rather than reimplementing the check. A Plus upsell is shown inline in `LocationsView` when the free limit is reached.
+
+### Location edge cases
+
+**Permission denied:** `LocationViewModel.useCurrentLocation()` checks `permissionStatus` before calling the service. If denied or restricted, `userFacingError` is set with a clear message. `LocationPermissionDeniedCard` shows the message and offers a deep-link to Settings (`app-settings:`).
+
+**Permission undetermined:** When the user requests their current location before answering the system permission prompt, `pendingCurrentLocationFetch` is set. `observePermissionStatus()` uses `withObservationTracking` to watch for the status change and fires the GPS fetch automatically on grant, or surfaces an error on deny.
+
+**Location unavailable:** `CLLocationManager` delegate failures are caught and resume the `CheckedContinuation` with `LocationError.locationUnavailable`. The ViewModel sets a user-facing message prompting a retry.
+
+**Geocoding failure:** If `CLGeocoder.reverseGeocodeLocation` fails, `fetchAndApplyCurrentLocation()` catches the error and saves a `SavedLocation` named "Current Location" using the raw GPS coordinates and the device timezone. Solar calculations still work correctly; only the display name is generic.
+
+**Timezone fallback:** `LocationGeocodingService` uses `placemark.timeZone?.identifier ?? TimeZone.current.identifier`. Callers always receive a valid IANA identifier. `TodayView` additionally guards with `TimeZone(identifier:) ?? .current` so a stale or malformed stored string never crashes the schedule calculation.
+
+**Simulator location testing:** The iOS Simulator does not provide real GPS. To test location in Simulator:
+
+1. Build and run the app.
+2. In Xcode's menu bar: **Features > Location** (Xcode 15 and earlier) or **Debug > Location** (Xcode 16+).
+3. Choose **Apple** (Apple Park), **City Bicycle Ride** (moves through San Francisco), or **Custom Location** to enter specific coordinates.
+4. Tap **Use Current Location** or **Refresh Current Location** in the app to trigger a new GPS fetch.
+
+Custom Location is the most useful option during development. The test suite reference coordinates work well: San Diego (32.7157, -117.1611), New York (40.7128, -74.0060), Tromsø (69.6492, 18.9553).
+
+### Location privacy note (developer planning, not final legal copy)
+
+Sunshift uses your location to calculate sunrise, sunset, and light-based routines for where you are. Location data is stored locally on your device for active and saved locations. Sunshift does not need continuous background tracking for the current v1 location system.
+
+---
+
 ## Post-1.0 Future Features
 
 These are not in scope for v1 but are worth keeping in mind to avoid closing off architectural doors.
