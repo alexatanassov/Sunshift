@@ -2,36 +2,9 @@ import SwiftUI
 
 struct TodayView: View {
     @Environment(LocationViewModel.self) private var locationViewModel
-
-    private var resolvedLocation: SavedLocation { locationViewModel.resolvedLocation }
-
-    private var tz: TimeZone {
-        TimeZone(identifier: resolvedLocation.timeZoneIdentifier) ?? .current
-    }
-
-    private var todaySchedule: SunSchedule? {
-        let location = resolvedLocation
-        let tzId = location.timeZoneIdentifier
-        let tz = TimeZone(identifier: tzId) ?? .current
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = tz
-        let today = cal.startOfDay(for: Date())
-        let input = SunCalculationInput(
-            date: today,
-            latitude: location.latitude,
-            longitude: location.longitude,
-            timeZoneIdentifier: tzId
-        )
-        return try? SunService().sunSchedule(for: input)
-    }
-
-    private func timeString(for date: Date?) -> String {
-        guard let date else { return "N/A" }
-        return date.formattedTime(in: tz)
-    }
+    @State private var viewModel = TodayViewModel()
 
     var body: some View {
-        let schedule = todaySchedule
         NavigationStack {
             ScrollView {
                 VStack(spacing: SunshiftSpacing.xl) {
@@ -44,7 +17,7 @@ struct TodayView: View {
                         Text("Your Solar Day")
                             .font(SunshiftTypography.display())
                             .foregroundStyle(SunshiftColors.primaryText)
-                        Text(resolvedLocation.name)
+                        Text(viewModel.locationDisplayName)
                             .font(SunshiftTypography.caption())
                             .foregroundStyle(SunshiftColors.secondaryText)
                     }
@@ -57,25 +30,25 @@ struct TodayView: View {
                             icon: "sunrise.fill",
                             color: SunshiftColors.sunrisePeach,
                             label: "Sunrise",
-                            detail: timeString(for: schedule?.sunrise)
+                            detail: viewModel.sunriseText
                         )
                         SolarEventRow(
                             icon: "sun.max.fill",
                             color: SunshiftColors.sunsetAmber,
                             label: "Solar Noon",
-                            detail: timeString(for: schedule?.solarNoon)
+                            detail: viewModel.solarNoonText
                         )
                         SolarEventRow(
                             icon: "sunset.fill",
                             color: SunshiftColors.sunsetAmber,
                             label: "Sunset",
-                            detail: timeString(for: schedule?.sunset)
+                            detail: viewModel.sunsetText
                         )
                         SolarEventRow(
                             icon: "moon.stars.fill",
                             color: SunshiftColors.duskPurple,
                             label: "Last Light",
-                            detail: timeString(for: schedule?.lastLight)
+                            detail: viewModel.lastLightText
                         )
                     }
                     .padding(.horizontal)
@@ -97,6 +70,15 @@ struct TodayView: View {
             .navigationBarTitleDisplayMode(.large)
         }
         .background(SunshiftColors.softBackground)
+        .task { refresh() }
+        .onChange(of: locationViewModel.resolvedLocation.id) { refresh() }
+    }
+
+    private func refresh() {
+        viewModel.refresh(
+            location: locationViewModel.resolvedLocation,
+            isUsingFallback: locationViewModel.isUsingFallback
+        )
     }
 }
 

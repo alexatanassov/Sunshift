@@ -12,6 +12,13 @@ extension TimeInterval {
         formatHoursAndMinutes()
     }
 
+    /// Formats a positive future interval as a countdown, e.g. "in 2h 14m" or "in 45m".
+    /// Returns "starting now" for intervals under one minute.
+    var formattedCountdown: String {
+        guard self >= 60 else { return "starting now" }
+        return "in \(formatHoursAndMinutes())"
+    }
+
     private func formatHoursAndMinutes() -> String {
         let totalMinutes = max(0, Int(self / 60))
         let hours = totalMinutes / 60
