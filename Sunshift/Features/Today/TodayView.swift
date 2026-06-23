@@ -12,6 +12,9 @@ struct TodayView: View {
                         TodayErrorView(message: error, onRetry: refresh)
                     } else {
                         HeroCard(viewModel: viewModel)
+                        if let schedule = viewModel.schedule {
+                            TodayTimelineView(schedule: schedule, now: Date())
+                        }
                         EventsSection(viewModel: viewModel)
                     }
 
