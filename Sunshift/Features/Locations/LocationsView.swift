@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LocationsView: View {
     @Environment(LocationViewModel.self) private var vm
+    @State private var showingManualEntry = false
 
     var body: some View {
         NavigationStack {
@@ -29,6 +30,20 @@ struct LocationsView: View {
             .background(SunshiftColors.softBackground)
             .navigationTitle("Locations")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingManualEntry = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .tint(SunshiftColors.sunsetAmber)
+                }
+            }
+            .sheet(isPresented: $showingManualEntry) {
+                ManualLocationEntryView()
+                    .environment(vm)
+            }
         }
         .background(SunshiftColors.softBackground)
     }
