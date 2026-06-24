@@ -11,6 +11,8 @@ struct RoutineScheduler {
         location: SavedLocation,
         after now: Date
     ) -> Date? {
+        guard routine.isEnabled else { return nil }
+
         let tz = TimeZone(identifier: location.timeZoneIdentifier) ?? .current
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz

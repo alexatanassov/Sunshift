@@ -180,6 +180,100 @@ struct RoutineSchedulerTests {
         #expect(result == nil)
     }
 
+    // MARK: - Morning light: 15 min after sunrise
+
+    @Test func morningLightTriggerIsEventDatePlusOffset() throws {
+        // 4:00 AM — well before sunrise (~5:47 AM) in SF on a June day.
+        let now = try makeDate(year: 2026, month: 6, day: 23, hour: 4)
+        let routine = makeRoutine(sunEventType: .sunrise, offsetMinutes: 15, isBeforeEvent: false)
+        let location = makeLocation()
+        let svc = SunService()
+
+        let trigger = RoutineScheduler.nextTriggerDate(
+            for: routine,
+            sunService: svc,
+            location: location,
+            after: now
+        )
+
+        let tz = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tz
+        let startOfDay = cal.startOfDay(for: now)
+        let input = SunCalculationInput(
+            date: startOfDay,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            timeZoneIdentifier: location.timeZoneIdentifier
+        )
+        let schedule = try svc.sunSchedule(for: input)
+        let expectedSunrise = try #require(schedule.sunrise)
+        let expectedTrigger = expectedSunrise + 15 * 60
+
+        let result = try #require(trigger)
+        #expect(abs(result.timeIntervalSince(expectedTrigger)) < 1)
+        #expect(result > now)
+    }
+
+    // MARK: - Disabled routine
+
+    @Test func disabledRoutineReturnsNil() throws {
+        let now = try makeDate(year: 2026, month: 6, day: 23, hour: 12)
+        let routine = LightRoutine(
+            title: "Disabled",
+            sunEventType: .sunset,
+            offsetMinutes: 30,
+            isBeforeEvent: true,
+            selectedWeekdays: .everyday,
+            isEnabled: false
+        )
+        let location = makeLocation()
+
+        let result = RoutineScheduler.nextTriggerDate(
+            for: routine,
+            sunService: SunService(),
+            location: location,
+            after: now
+        )
+
+        #expect(result == nil)
+    }
+
+    // MARK: - Non-Pacific timezone
+
+    @Test func nonPacificTimezoneYieldsCorrectTrigger() throws {
+        // New York, noon on a summer day — sunset is still hours away (~8:28 PM EDT).
+        let now = try makeDate(year: 2026, month: 6, day: 23, hour: 12, tzID: "America/New_York")
+        let location = makeLocation(latitude: 40.7128, longitude: -74.0060, tzID: "America/New_York")
+        let routine = makeRoutine(sunEventType: .sunset, offsetMinutes: 30, isBeforeEvent: true)
+        let svc = SunService()
+
+        let trigger = RoutineScheduler.nextTriggerDate(
+            for: routine,
+            sunService: svc,
+            location: location,
+            after: now
+        )
+
+        let tz = try #require(TimeZone(identifier: "America/New_York"))
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tz
+        let startOfDay = cal.startOfDay(for: now)
+        let input = SunCalculationInput(
+            date: startOfDay,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            timeZoneIdentifier: location.timeZoneIdentifier
+        )
+        let schedule = try svc.sunSchedule(for: input)
+        let expectedSunset = try #require(schedule.sunset)
+        let expectedTrigger = expectedSunset - 30 * 60
+
+        let result = try #require(trigger)
+        #expect(abs(result.timeIntervalSince(expectedTrigger)) < 1)
+        #expect(result > now)
+    }
+
     // MARK: - Polar conditions return nil for unavailable event
 
     @Test func returnsNilWhenEventUnavailableAllDays() throws {

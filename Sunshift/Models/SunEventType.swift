@@ -16,6 +16,11 @@ enum SunEventType: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    // daylightRemaining is a duration, not a point in time, so it cannot be used as a trigger.
+    static var routineTriggerCases: [SunEventType] {
+        allCases.filter { $0 != .daylightRemaining }
+    }
+
     var displayName: String {
         switch self {
         case .sunrise:             return "Sunrise"

@@ -152,7 +152,7 @@ struct RoutineEditView: View {
     private var timingSection: some View {
         Section("Timing") {
             Picker("Event", selection: $sunEventType) {
-                ForEach(SunEventType.allCases) { event in
+                ForEach(SunEventType.routineTriggerCases) { event in
                     Text(event.displayName).tag(event)
                 }
             }

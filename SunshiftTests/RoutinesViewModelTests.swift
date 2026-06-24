@@ -192,6 +192,34 @@ struct RoutinesViewModelTests {
         #expect(store.routines[0].isEnabled == !wasEnabled)
     }
 
+    // MARK: - Add from template
+
+    @Test func addFromTemplateCreatesExpectedDefaults() throws {
+        let (vm, store) = makeViewModelAndStore(isPlusUser: true)
+
+        let template = RoutineTemplate.morningLight
+        let routine = LightRoutine(
+            title: template.displayName,
+            templateType: template,
+            sunEventType: template.defaultSunEventType,
+            offsetMinutes: template.defaultOffsetMinutes,
+            isBeforeEvent: template.defaultIsBeforeEvent,
+            selectedWeekdays: .everyday,
+            isEnabled: true,
+            notificationMessage: template.defaultNotificationMessage
+        )
+        vm.addRoutine(routine)
+
+        let added = try #require(store.routines.first(where: { $0.templateType == .morningLight }))
+        #expect(added.title == "Morning Light")
+        #expect(added.sunEventType == .sunrise)
+        #expect(added.offsetMinutes == 15)
+        #expect(added.isBeforeEvent == false)
+        #expect(added.selectedWeekdays == .everyday)
+        #expect(added.isEnabled == true)
+        #expect(added.notificationMessage == "Good morning. Sunrise is here.")
+    }
+
     // MARK: - Delete
 
     @Test func deleteRemovesRoutineFromStore() {
