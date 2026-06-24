@@ -31,14 +31,21 @@ final class TodayViewModel {
     private(set) var nextEventTitle: String? = nil
     private(set) var nextEventCountdownText: String? = nil
 
-    private(set) var sunsetWalkTimeText: String? = nil
+    // MARK: - Routine State
+
+    /// True when an enabled routine exists (even if its trigger time is unavailable).
+    private(set) var hasNextRoutine: Bool = false
+    private(set) var nextRoutineName: String = ""
+    /// Formatted fire time ("6:47 PM") or "Not available today" when the event is missing.
+    private(set) var nextRoutineTimeText: String = ""
+    /// Human-readable offset description ("30 min before Sunset").
+    private(set) var nextRoutineTriggerText: String = ""
 
     private(set) var isLoading: Bool = false
     private(set) var errorMessage: String? = nil
     private(set) var hasRefreshed: Bool = false
 
     // True when the active schedule has no sunrise or sunset (polar day or polar night).
-    // isPolarNight is currently unreachable because SunService always produces a solarNoon.
     var isPolarDay: Bool {
         guard let s = schedule else { return false }
         return s.sunrise == nil && s.sunset == nil && s.solarNoon != nil
@@ -60,8 +67,13 @@ final class TodayViewModel {
     // MARK: - Refresh
 
     /// Recomputes all UI state for `location` at `now`.
-    /// Call from the view on `.task` and whenever the active location changes.
-    func refresh(location: SavedLocation, isUsingFallback: Bool, now: Date = Date()) {
+    /// Pass the first enabled routine so the next-routine card reflects real data.
+    func refresh(
+        location: SavedLocation,
+        isUsingFallback: Bool,
+        enabledRoutine: LightRoutine? = nil,
+        now: Date = Date()
+    ) {
         locationDisplayName = location.name
         locationSubtitle = location.subtitle
         locationKind = resolveLocationKind(location: location, isUsingFallback: isUsingFallback)
@@ -89,10 +101,9 @@ final class TodayViewModel {
             lastLightText  = s.lastLight.map     { $0.formattedTime(in: tz) } ?? "--"
 
             daylightRemainingText = s.daylightRemaining(at: now).map { $0.formattedDaylightRemaining }
-            sunsetWalkTimeText = s.sunset.map { ($0 - 30 * 60).formattedTime(in: tz) }
 
             let nextEvent = try sunService.nextRelevantEvent(after: now, schedule: s, input: input)
-            nextEventTitle        = nextEvent?.displayName
+            nextEventTitle         = nextEvent?.displayName
             nextEventCountdownText = nextEvent.map { $0.time.timeIntervalSince(now).formattedCountdown }
 
             errorMessage = nil
@@ -101,10 +112,42 @@ final class TodayViewModel {
             errorMessage = "Could not load today's sun schedule. Try again shortly."
         }
 
+        updateRoutineState(enabledRoutine: enabledRoutine, location: location, now: now, tz: tz)
+
         hasRefreshed = true
     }
 
     // MARK: - Private
+
+    private func updateRoutineState(
+        enabledRoutine: LightRoutine?,
+        location: SavedLocation,
+        now: Date,
+        tz: TimeZone
+    ) {
+        guard let routine = enabledRoutine else {
+            hasNextRoutine = false
+            nextRoutineName = ""
+            nextRoutineTimeText = ""
+            nextRoutineTriggerText = ""
+            return
+        }
+
+        hasNextRoutine = true
+        nextRoutineName = routine.title
+        nextRoutineTriggerText = formatTriggerText(for: routine)
+
+        if let trigger = RoutineScheduler.nextTriggerDate(
+            for: routine,
+            sunService: sunService,
+            location: location,
+            after: now
+        ) {
+            nextRoutineTimeText = trigger.formattedTime(in: tz)
+        } else {
+            nextRoutineTimeText = "Not available today"
+        }
+    }
 
     private func resolveLocationKind(location: SavedLocation, isUsingFallback: Bool) -> LocationKind {
         if isUsingFallback { return .fallback }
@@ -122,6 +165,21 @@ final class TodayViewModel {
         daylightRemainingText  = nil
         nextEventTitle         = nil
         nextEventCountdownText = nil
-        sunsetWalkTimeText     = nil
+    }
+
+    private func formatTriggerText(for routine: LightRoutine) -> String {
+        let eventName = routine.sunEventType.displayName
+        guard routine.offsetMinutes > 0 else { return "At \(eventName)" }
+        let direction = routine.isBeforeEvent ? "before" : "after"
+        return "\(formatOffset(minutes: routine.offsetMinutes)) \(direction) \(eventName)"
+    }
+
+    private func formatOffset(minutes: Int) -> String {
+        guard minutes > 0 else { return "" }
+        if minutes < 60 { return "\(minutes) min" }
+        let hrs = minutes / 60
+        let rem = minutes % 60
+        if rem == 0 { return hrs == 1 ? "1 hr" : "\(hrs) hrs" }
+        return "\(hrs) hr \(rem) min"
     }
 }

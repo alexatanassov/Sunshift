@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TodayView: View {
     @Environment(LocationViewModel.self) private var locationViewModel
+    @Environment(RoutineStore.self) private var routineStore
     @State private var viewModel = TodayViewModel()
 
     var body: some View {
@@ -30,6 +31,7 @@ struct TodayView: View {
         .background(SunshiftColors.softBackground)
         .task { refresh() }
         .onChange(of: locationViewModel.resolvedLocation.id) { refresh() }
+        .onChange(of: routineStore.routines) { refresh() }
     }
 
     @ViewBuilder
@@ -51,9 +53,11 @@ struct TodayView: View {
     }
 
     private func refresh() {
+        let enabledRoutine = routineStore.routines.first(where: { $0.isEnabled })
         viewModel.refresh(
             location: locationViewModel.resolvedLocation,
-            isUsingFallback: locationViewModel.isUsingFallback
+            isUsingFallback: locationViewModel.isUsingFallback,
+            enabledRoutine: enabledRoutine
         )
     }
 }
@@ -378,13 +382,6 @@ private struct EventRow: View {
 private struct NextRoutineCard: View {
     let viewModel: TodayViewModel
 
-    private var timeDetail: String {
-        if let t = viewModel.sunsetWalkTimeText {
-            return "30 min before sunset (\(t))"
-        }
-        return "30 minutes before sunset"
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
             Text("Next routine")
@@ -393,32 +390,56 @@ private struct NextRoutineCard: View {
                 .textCase(.uppercase)
                 .kerning(0.5)
 
-            HStack(alignment: .top, spacing: SunshiftSpacing.md) {
-                Image(systemName: "figure.walk")
-                    .font(.title2)
-                    .foregroundStyle(SunshiftColors.sunsetAmber)
-                    .frame(width: 28)
+            if viewModel.hasNextRoutine {
+                HStack(alignment: .top, spacing: SunshiftSpacing.md) {
+                    Image(systemName: "bell.fill")
+                        .font(.title2)
+                        .foregroundStyle(SunshiftColors.sunsetAmber)
+                        .frame(width: 28)
 
-                VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
-                    Text("Sunset Walk")
-                        .font(SunshiftTypography.headline())
-                        .foregroundStyle(SunshiftColors.primaryText)
-                    Text(timeDetail)
-                        .font(SunshiftTypography.body())
-                        .foregroundStyle(SunshiftColors.secondaryText)
-                        .monospacedDigit()
+                    VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
+                        Text(viewModel.nextRoutineName)
+                            .font(SunshiftTypography.headline())
+                            .foregroundStyle(SunshiftColors.primaryText)
+                        Text(viewModel.nextRoutineTimeText)
+                            .font(SunshiftTypography.body())
+                            .foregroundStyle(SunshiftColors.secondaryText)
+                            .monospacedDigit()
+                        if !viewModel.nextRoutineTriggerText.isEmpty {
+                            Text(viewModel.nextRoutineTriggerText)
+                                .font(SunshiftTypography.caption())
+                                .foregroundStyle(SunshiftColors.secondaryText.opacity(0.7))
+                        }
+                    }
+                }
+            } else {
+                HStack(alignment: .top, spacing: SunshiftSpacing.md) {
+                    Image(systemName: "bell.slash")
+                        .font(.title2)
+                        .foregroundStyle(SunshiftColors.secondaryText.opacity(0.4))
+                        .frame(width: 28)
+
+                    VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
+                        Text("No routines yet")
+                            .font(SunshiftTypography.headline())
+                            .foregroundStyle(SunshiftColors.primaryText.opacity(0.55))
+                        Text("Add a routine in the Routines tab.")
+                            .font(SunshiftTypography.body())
+                            .foregroundStyle(SunshiftColors.secondaryText)
+                    }
                 }
             }
 
-            Text("Routine scheduling comes next.")
+            Text("Your next light-based reminder.")
                 .font(SunshiftTypography.caption())
-                .foregroundStyle(SunshiftColors.secondaryText.opacity(0.7))
+                .foregroundStyle(SunshiftColors.secondaryText.opacity(0.6))
                 .padding(.top, SunshiftSpacing.xs)
         }
         .padding(SunshiftSpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(SunshiftColors.cardBackground, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
         .cardShadow()
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -450,4 +471,5 @@ private struct TodayErrorView: View {
 #Preview {
     TodayView()
         .environment(LocationViewModel(subscriptionService: SubscriptionService()))
+        .environment(RoutineStore())
 }

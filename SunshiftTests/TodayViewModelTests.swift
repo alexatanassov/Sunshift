@@ -282,6 +282,128 @@ struct TodayViewModelTests {
         #expect(vm.errorMessage != nil)
     }
 
+    // MARK: - Routine state
+
+    @Test func hasNextRoutine_falseWhenNoEnabledRoutine() throws {
+        let vm = TodayViewModel()
+        let location = makeSavedLocation()
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "America/Los_Angeles")
+        vm.refresh(location: location, isUsingFallback: false, enabledRoutine: nil, now: now)
+        #expect(vm.hasNextRoutine == false)
+        #expect(vm.nextRoutineName == "")
+        #expect(vm.nextRoutineTimeText == "")
+    }
+
+    @Test func hasNextRoutine_trueWhenEnabledRoutineExists() throws {
+        let vm = TodayViewModel()
+        let location = makeSavedLocation()
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "America/Los_Angeles")
+        let routine = LightRoutine(
+            title: "Sunset Walk",
+            sunEventType: .sunset,
+            offsetMinutes: 30,
+            isBeforeEvent: true,
+            selectedWeekdays: .everyday,
+            isEnabled: true
+        )
+        vm.refresh(location: location, isUsingFallback: false, enabledRoutine: routine, now: now)
+        #expect(vm.hasNextRoutine == true)
+    }
+
+    @Test func nextRoutineName_matchesEnabledRoutineTitle() throws {
+        let vm = TodayViewModel()
+        let location = makeSavedLocation()
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "America/Los_Angeles")
+        let routine = LightRoutine(
+            title: "Evening Stroll",
+            sunEventType: .sunset,
+            offsetMinutes: 0,
+            isBeforeEvent: false,
+            selectedWeekdays: .everyday,
+            isEnabled: true
+        )
+        vm.refresh(location: location, isUsingFallback: false, enabledRoutine: routine, now: now)
+        #expect(vm.nextRoutineName == "Evening Stroll")
+    }
+
+    @Test func nextRoutineTimeText_nonEmptyWhenSchedulerFindsTime() throws {
+        let vm = TodayViewModel()
+        let location = makeSavedLocation()
+        // Noon — sunset trigger is still ahead
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "America/Los_Angeles")
+        let routine = LightRoutine(
+            title: "Sunset Walk",
+            sunEventType: .sunset,
+            offsetMinutes: 30,
+            isBeforeEvent: true,
+            selectedWeekdays: .everyday,
+            isEnabled: true
+        )
+        vm.refresh(location: location, isUsingFallback: false, enabledRoutine: routine, now: now)
+        #expect(vm.nextRoutineTimeText != "")
+        #expect(vm.nextRoutineTimeText != "Not available today")
+    }
+
+    @Test func nextRoutineTimeText_placeholderWhenSchedulerReturnsNil() throws {
+        let vm = TodayViewModel()
+        // Tromsø in midsummer: no sunset event
+        let location = makeSavedLocation(latitude: 69.6492, longitude: 18.9553, tzID: "Europe/Oslo")
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "Europe/Oslo")
+        let routine = LightRoutine(
+            title: "Sunset Walk",
+            sunEventType: .sunset,
+            offsetMinutes: 30,
+            isBeforeEvent: true,
+            selectedWeekdays: .everyday,
+            isEnabled: true
+        )
+        vm.refresh(location: location, isUsingFallback: false, enabledRoutine: routine, now: now)
+        #expect(vm.hasNextRoutine == true)
+        #expect(vm.nextRoutineTimeText == "Not available today")
+    }
+
+    @Test func nextRoutineTriggerText_nonEmptyForOffsetRoutine() throws {
+        let vm = TodayViewModel()
+        let location = makeSavedLocation()
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "America/Los_Angeles")
+        let routine = LightRoutine(
+            title: "Sunset Walk",
+            sunEventType: .sunset,
+            offsetMinutes: 30,
+            isBeforeEvent: true,
+            selectedWeekdays: .everyday,
+            isEnabled: true
+        )
+        vm.refresh(location: location, isUsingFallback: false, enabledRoutine: routine, now: now)
+        #expect(vm.nextRoutineTriggerText == "30 min before Sunset")
+    }
+
+    @Test func nextRoutineTriggerText_atEventWhenOffsetIsZero() throws {
+        let vm = TodayViewModel()
+        let location = makeSavedLocation()
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "America/Los_Angeles")
+        let routine = LightRoutine(
+            title: "Solar Noon",
+            sunEventType: .solarNoon,
+            offsetMinutes: 0,
+            isBeforeEvent: false,
+            selectedWeekdays: .everyday,
+            isEnabled: true
+        )
+        vm.refresh(location: location, isUsingFallback: false, enabledRoutine: routine, now: now)
+        #expect(vm.nextRoutineTriggerText == "At Solar Noon")
+    }
+
+    @Test func disabledRoutineIgnoredWhenNilPassedToVM() throws {
+        let vm = TodayViewModel()
+        let location = makeSavedLocation()
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "America/Los_Angeles")
+        // Caller is responsible for filtering; pass nil to simulate no enabled routine
+        vm.refresh(location: location, isUsingFallback: false, enabledRoutine: nil, now: now)
+        #expect(vm.hasNextRoutine == false)
+        #expect(vm.nextRoutineName == "")
+    }
+
     // MARK: Repeated refresh
 
     @Test func secondRefresh_clearsStaleSchedule() throws {
