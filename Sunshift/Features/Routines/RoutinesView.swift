@@ -44,7 +44,7 @@ struct RoutinesView: View {
                     }
                     .padding(.horizontal)
 
-                    Label("Routines are coming in Stage 1", systemImage: "clock")
+                    Label("Routine scheduling comes next.", systemImage: "clock")
                         .font(SunshiftTypography.caption())
                         .foregroundStyle(SunshiftColors.secondaryText.opacity(0.6))
 

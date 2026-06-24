@@ -150,7 +150,7 @@ private struct HeroCard: View {
                 .foregroundStyle(.white.opacity(0.75))
         } else if let title = viewModel.nextEventTitle,
                   let countdown = viewModel.nextEventCountdownText {
-            Text("\(title) \(countdown)")
+            Text("\(naturalTitle(for: title)) \(countdown)")
                 .font(SunshiftTypography.display(30))
                 .foregroundStyle(.white)
         } else if viewModel.schedule != nil {
@@ -161,6 +161,21 @@ private struct HeroCard: View {
             Text("Calculating...")
                 .font(SunshiftTypography.display(28))
                 .foregroundStyle(.white.opacity(0.5))
+        }
+    }
+
+    private func naturalTitle(for eventTitle: String) -> String {
+        switch eventTitle {
+        case "First Light":       return "First light"
+        case "Blue Hour Start":   return "Blue hour starts"
+        case "Sunrise":           return "Sunrise"
+        case "Golden Hour Start": return "Golden hour starts"
+        case "Solar Noon":        return "Solar noon"
+        case "Golden Hour End":   return "Golden hour ends"
+        case "Sunset":            return "Sunset"
+        case "Blue Hour End":     return "Blue hour ends"
+        case "Last Light":        return "Last light"
+        default:                  return eventTitle
         }
     }
 
@@ -237,7 +252,7 @@ private struct HeroCard: View {
         } else if viewModel.isPolarNight {
             parts.append("Night all day")
         } else if let title = viewModel.nextEventTitle, let countdown = viewModel.nextEventCountdownText {
-            parts.append("\(title) \(countdown)")
+            parts.append("\(naturalTitle(for: title)) \(countdown)")
         } else if viewModel.schedule != nil {
             parts.append("All done for today")
         }
