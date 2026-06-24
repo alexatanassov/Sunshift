@@ -19,11 +19,9 @@ struct RoutinesView: View {
                         freeLimitHint
                             .padding(.top, SunshiftSpacing.xs)
                     }
-
-                    Spacer(minLength: SunshiftSpacing.xl)
                 }
                 .padding(.horizontal, SunshiftSpacing.md)
-                .padding(.top, SunshiftSpacing.xs)
+                .padding(.top, SunshiftSpacing.sm)
                 .padding(.bottom, SunshiftSpacing.xl)
             }
             .background(SunshiftColors.softBackground)
@@ -73,7 +71,7 @@ struct RoutinesView: View {
     // MARK: - Subviews
 
     private var routineList: some View {
-        VStack(spacing: SunshiftSpacing.sm) {
+        VStack(spacing: SunshiftSpacing.md) {
             ForEach(viewModel.routines) { routine in
                 RoutineRow(
                     routine: routine,
@@ -89,9 +87,9 @@ struct RoutinesView: View {
     private var emptyState: some View {
         VStack(spacing: SunshiftSpacing.md) {
             Spacer(minLength: SunshiftSpacing.xxl)
-            Image(systemName: "bell.slash")
-                .font(.system(size: 44))
-                .foregroundStyle(SunshiftColors.secondaryText.opacity(0.35))
+            Image(systemName: "sun.horizon.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(SunshiftColors.sunsetAmber.opacity(0.45))
             VStack(spacing: SunshiftSpacing.xs) {
                 Text("No routines yet")
                     .font(SunshiftTypography.headline())
@@ -112,11 +110,11 @@ struct RoutinesView: View {
                 .font(.body)
                 .foregroundStyle(SunshiftColors.duskPurple)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Want more routines?")
+                Text("Want unlimited routines?")
                     .font(SunshiftTypography.caption())
                     .fontWeight(.semibold)
                     .foregroundStyle(SunshiftColors.primaryText)
-                Text("Sunshift Plus lets you add as many as you like.")
+                Text("Sunshift Plus removes the limit.")
                     .font(SunshiftTypography.caption())
                     .foregroundStyle(SunshiftColors.secondaryText)
             }
@@ -147,7 +145,7 @@ private struct RoutineRow: View {
                     eventIcon
                     content
                     Spacer()
-                    Color.clear.frame(width: 44)
+                    Color.clear.frame(width: 52)
                 }
                 .padding(SunshiftSpacing.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -157,16 +155,18 @@ private struct RoutineRow: View {
             // Enable toggle, overlaid at trailing edge
             Button(action: onToggle) {
                 Image(systemName: routine.isEnabled ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
+                    .font(.system(size: 22))
                     .foregroundStyle(
                         routine.isEnabled
                             ? SunshiftColors.sunsetAmber
-                            : SunshiftColors.secondaryText.opacity(0.3)
+                            : SunshiftColors.secondaryText.opacity(0.4)
                     )
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
                     .animation(.easeInOut(duration: 0.15), value: routine.isEnabled)
             }
             .buttonStyle(.plain)
-            .padding(.trailing, SunshiftSpacing.md)
+            .padding(.trailing, SunshiftSpacing.sm)
         }
         .background(
             SunshiftColors.cardBackground,
@@ -177,18 +177,20 @@ private struct RoutineRow: View {
         .animation(.easeInOut(duration: 0.2), value: routine.isEnabled)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(routine.title). \(trigger). \(days). \(routine.isEnabled ? "Enabled" : "Disabled")")
-        .accessibilityHint("Double-tap to edit. Toggle circle to enable or disable.")
+        .accessibilityHint("Double-tap to edit. Toggle to enable or disable.")
     }
 
     private var eventIcon: some View {
-        Image(systemName: iconName(for: routine.sunEventType))
-            .font(.title2)
-            .foregroundStyle(iconColor(for: routine.sunEventType))
-            .frame(width: 32)
+        let color = iconColor(for: routine.sunEventType)
+        return Image(systemName: iconName(for: routine.sunEventType))
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(color)
+            .frame(width: 36, height: 36)
+            .background(color.opacity(0.12), in: Circle())
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
             Text(routine.title)
                 .font(SunshiftTypography.headline())
                 .foregroundStyle(SunshiftColors.primaryText)

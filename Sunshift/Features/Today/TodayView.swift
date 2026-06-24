@@ -383,7 +383,7 @@ private struct NextRoutineCard: View {
     let viewModel: TodayViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
+        VStack(alignment: .leading, spacing: SunshiftSpacing.sm) {
             Text("Next routine")
                 .font(SunshiftTypography.caption())
                 .foregroundStyle(SunshiftColors.secondaryText)
@@ -394,7 +394,7 @@ private struct NextRoutineCard: View {
                 HStack(alignment: .top, spacing: SunshiftSpacing.md) {
                     Image(systemName: "bell.fill")
                         .font(.title2)
-                        .foregroundStyle(SunshiftColors.sunsetAmber)
+                        .foregroundStyle(SunshiftColors.duskPurple)
                         .frame(width: 28)
 
                     VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
@@ -416,24 +416,19 @@ private struct NextRoutineCard: View {
                 HStack(alignment: .top, spacing: SunshiftSpacing.md) {
                     Image(systemName: "bell.slash")
                         .font(.title2)
-                        .foregroundStyle(SunshiftColors.secondaryText.opacity(0.4))
+                        .foregroundStyle(SunshiftColors.secondaryText.opacity(0.5))
                         .frame(width: 28)
 
                     VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
                         Text("No routines yet")
                             .font(SunshiftTypography.headline())
                             .foregroundStyle(SunshiftColors.primaryText.opacity(0.55))
-                        Text("Add a routine in the Routines tab.")
+                        Text("Head to the Routines tab to add one.")
                             .font(SunshiftTypography.body())
                             .foregroundStyle(SunshiftColors.secondaryText)
                     }
                 }
             }
-
-            Text("Your next light-based reminder.")
-                .font(SunshiftTypography.caption())
-                .foregroundStyle(SunshiftColors.secondaryText.opacity(0.6))
-                .padding(.top, SunshiftSpacing.xs)
         }
         .padding(SunshiftSpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)

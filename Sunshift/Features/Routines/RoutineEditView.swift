@@ -145,7 +145,7 @@ struct RoutineEditView: View {
         } header: {
             Text("Template")
         } footer: {
-            Text("Pick a starting point. You can adjust anything below.")
+            Text("Templates fill in the timing for you. Adjust anything below.")
         }
     }
 
@@ -194,7 +194,7 @@ struct RoutineEditView: View {
             Text("Message")
         } footer: {
             if !subscriptionService.canUseCustomNotificationMessages {
-                Text("Custom messages are a Sunshift Plus feature.")
+                Text("Custom messages are available with Sunshift Plus.")
                     .foregroundStyle(SunshiftColors.duskPurple.opacity(0.8))
             }
         }
@@ -298,16 +298,17 @@ private struct WeekdayChipRow: View {
         let id: Int
         let day: WeekdaySelection
         let label: String
+        let fullName: String
     }
 
     private let chips: [DayChip] = [
-        DayChip(id: 0, day: .sunday,    label: "S"),
-        DayChip(id: 1, day: .monday,    label: "M"),
-        DayChip(id: 2, day: .tuesday,   label: "T"),
-        DayChip(id: 3, day: .wednesday, label: "W"),
-        DayChip(id: 4, day: .thursday,  label: "T"),
-        DayChip(id: 5, day: .friday,    label: "F"),
-        DayChip(id: 6, day: .saturday,  label: "S"),
+        DayChip(id: 0, day: .sunday,    label: "S", fullName: "Sunday"),
+        DayChip(id: 1, day: .monday,    label: "M", fullName: "Monday"),
+        DayChip(id: 2, day: .tuesday,   label: "T", fullName: "Tuesday"),
+        DayChip(id: 3, day: .wednesday, label: "W", fullName: "Wednesday"),
+        DayChip(id: 4, day: .thursday,  label: "T", fullName: "Thursday"),
+        DayChip(id: 5, day: .friday,    label: "F", fullName: "Friday"),
+        DayChip(id: 6, day: .saturday,  label: "S", fullName: "Saturday"),
     ]
 
     var body: some View {
@@ -335,6 +336,8 @@ private struct WeekdayChipRow: View {
                 }
                 .buttonStyle(.plain)
                 .animation(.easeInOut(duration: 0.15), value: isOn)
+                .accessibilityLabel(chip.fullName)
+                .accessibilityAddTraits(isOn ? .isSelected : [])
             }
         }
         .frame(maxWidth: .infinity)
