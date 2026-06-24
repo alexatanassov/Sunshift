@@ -6,7 +6,7 @@ Alarms that move with the sun. Sunshift lets users build routines anchored to so
 
 ## Current Stage: Stage 4 - Routine System
 
-The routine system is complete. `LightRoutine` is a fully-specified model with title, solar event anchor, before/after offset, weekday selection, enable/disable flag, and notification message. `RoutineStore` persists routines to `UserDefaults` and seeds a default "Sunset Walk" routine on first launch. `RoutineScheduler` computes the next trigger date by scanning up to 8 days forward and accounting for disabled routines, inactive weekdays, and unavailable solar events. `RoutinesViewModel` enforces the free-tier limit (1 routine) and exposes display helpers for the list. `RoutinesView` shows a full routine list with per-row enable toggles, and `RoutineEditView` handles both create and edit modes with a template picker, timing controls, weekday chips, and a delete action. The Today screen `NextRoutineCard` is wired to real data from `RoutineStore` and `RoutineScheduler`.
+The routine system is complete. `LightRoutine` is a fully-specified model with title, solar event anchor, before/after offset, weekday selection, enable/disable flag, and notification message. `RoutineStore` persists routines to `UserDefaults`; the first routine is created during onboarding. `RoutineScheduler` computes the next trigger date by scanning up to 8 days forward and accounting for disabled routines, inactive weekdays, and unavailable solar events. `RoutinesViewModel` enforces the free-tier limit (1 routine) and exposes display helpers for the list. `RoutinesView` shows a full routine list with per-row enable toggles, and `RoutineEditView` handles both create and edit modes with a template picker, timing controls, weekday chips, and a delete action. The Today screen `NextRoutineCard` is wired to real data from `RoutineStore` and `RoutineScheduler`.
 
 ---
 
@@ -142,7 +142,7 @@ Sunshift/
 │   ├── DeviceLocationService.swift      # CLLocationManager wrapper; one-shot requestLocation()
 │   ├── LocationGeocodingService.swift   # CLGeocoder reverse geocoding; builds SavedLocation from placemark
 │   ├── LocationStore.swift              # @Observable; persists savedLocations + activeLocationID to UserDefaults
-│   ├── RoutineStore.swift               # @Observable; persists [LightRoutine] to UserDefaults; seeds on first launch
+│   ├── RoutineStore.swift               # @Observable; persists [LightRoutine] to UserDefaults; first routine created by onboarding
 │   ├── RoutineScheduler.swift           # Static; nextTriggerDate scans up to 8 days, respects weekdays and offsets
 │   ├── SunService.swift                 # NOAA-style solar position engine; no network required
 │   ├── SunService+NextRelevantEvent.swift # Cross-midnight next-event fallback
@@ -327,8 +327,7 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 | `RoutineTemplate` | Enum in `SubscriptionTier.swift`: sunsetWalk, morningLight, windDown, goldenHourShoot, custom; each carries default event, offset, direction, and notification message; `requiresPlus` gate |
 | `WeekdaySelection` | `OptionSet` bitmask (7 bits); everyday/weekdays/weekends presets; `contains(calendarWeekday:)` maps `Calendar.weekday` (1=Sun...7=Sat); `friendlyLabel` produces human-readable summary |
 | `ReminderOffset` | Enum with `.atEvent`, `.preset(minutes:)`, `.custom(minutes:)`; named presets at 5, 10, 15, 30, 60 minutes |
-| `RoutineStore` | `@Observable`; persists `[LightRoutine]` to `UserDefaults` key `sunshift.light_routines` as JSON; seeds default "Sunset Walk" on first launch when the key is absent; `add`, `update`, `toggleEnabled`, `delete` mutations |
-| Default seed | "Sunset Walk" -- 30 min before sunset, every day, enabled; seeded exactly once on first launch |
+| `RoutineStore` | `@Observable`; persists `[LightRoutine]` to `UserDefaults` key `sunshift.light_routines` as JSON; starts empty on fresh install; `add`, `update`, `toggleEnabled`, `delete` mutations |
 | `RoutineScheduler` | Static struct; `nextTriggerDate(for:sunService:location:after:)` scans today through the next 7 days; applies weekday filter, resolves the solar event via `SunSchedule.event(for:)`, applies the before/after offset, returns the first trigger strictly after `now` |
 | `SunEventType` additions | `routineTriggerCases` excludes `.daylightRemaining` (duration, not a point in time); `SunSchedule.event(for:)` resolves any trigger case to a `Date?` |
 | `RoutinesViewModel` | `@Observable`; `canAddRoutine` and `isAtFreeLimit` enforce `FreeTierLimits.maxActiveRoutines = 1` for free users; `triggerDescription(for:)` and `activeDaysSummary(for:)` produce display strings; mutations delegate to `RoutineStore` |

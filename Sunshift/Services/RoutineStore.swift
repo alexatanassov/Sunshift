@@ -9,9 +9,7 @@ final class RoutineStore {
 
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
-        let isFirstLaunch = userDefaults.data(forKey: key) == nil
         load()
-        if isFirstLaunch { seed() }
     }
 
     // MARK: - Mutations
@@ -55,17 +53,4 @@ final class RoutineStore {
         userDefaults.set(data, forKey: key)
     }
 
-    private func seed() {
-        let routine = LightRoutine(
-            title: "Sunset Walk",
-            templateType: .sunsetWalk,
-            sunEventType: .sunset,
-            offsetMinutes: 30,
-            isBeforeEvent: true,
-            selectedWeekdays: .everyday,
-            isEnabled: true,
-            notificationMessage: RoutineTemplate.sunsetWalk.defaultNotificationMessage
-        )
-        add(routine)
-    }
 }

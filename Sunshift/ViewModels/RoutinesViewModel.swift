@@ -54,8 +54,8 @@ final class RoutinesViewModel {
         store.delete(id: id)
     }
 
-    // Updates the first existing routine in place, or adds one if the store is empty.
-    // Used by onboarding so we never duplicate the seeded Sunset Walk routine.
+    // Updates the first existing routine in place, or adds one when the store is empty.
+    // Onboarding is the sole path that creates the first routine on a fresh install.
     func upsertOnboardingRoutine(_ routine: LightRoutine) {
         guard routines.isEmpty else {
             var existing = routines[0]

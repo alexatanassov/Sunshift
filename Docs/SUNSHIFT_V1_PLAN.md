@@ -338,13 +338,13 @@ Stage 4 implements the full routine lifecycle from model definition through pers
 
 Free users see all templates in the picker but Plus templates are labelled and cannot be selected without a subscription.
 
-### Default Seeded Routine
+### First Routine Ownership
 
-`RoutineStore.seed()` runs once on first launch when the `sunshift.light_routines` key is absent from `UserDefaults`. It creates a "Sunset Walk" routine using the `sunsetWalk` template defaults: 30 min before sunset, every day, enabled. This gives every new user an immediately working routine without requiring any setup.
+`RoutineStore` starts empty on a fresh install. Onboarding is the sole path that creates the first routine via `RoutinesViewModel.upsertOnboardingRoutine(_:)`. If a routine already exists when onboarding completes, the method updates the first routine in place rather than appending a duplicate.
 
 ### RoutineStore Persistence
 
-`RoutineStore` is `@Observable`. It persists `[LightRoutine]` to `UserDefaults` under the key `sunshift.light_routines` as JSON via `Codable`. All mutations (`add`, `update`, `toggleEnabled`, `delete`) write synchronously after each change. `toggleEnabled` also stamps `updatedAt`. The store seeds on first launch and is safe to call `load()` when the key is missing (no-op).
+`RoutineStore` is `@Observable`. It persists `[LightRoutine]` to `UserDefaults` under the key `sunshift.light_routines` as JSON via `Codable`. All mutations (`add`, `update`, `toggleEnabled`, `delete`) write synchronously after each change. `toggleEnabled` also stamps `updatedAt`. `load()` is a no-op when the key is missing, so a fresh store starts with zero routines.
 
 ### RoutineScheduler
 

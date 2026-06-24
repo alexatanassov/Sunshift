@@ -10,43 +10,16 @@ struct RoutineStoreTests {
         UserDefaults(suiteName: "sunshift.storetest.\(UUID().uuidString)")!
     }
 
-    /// Store backed by defaults that already contain an empty routine array (skips seeding).
     private func makeEmptyStore() -> (RoutineStore, UserDefaults) {
         let defaults = makeFreshDefaults()
-        let emptyData = try! JSONEncoder().encode([LightRoutine]())
-        defaults.set(emptyData, forKey: "sunshift.light_routines")
         return (RoutineStore(userDefaults: defaults), defaults)
     }
 
-    // MARK: - Seeding
+    // MARK: - Initial state
 
-    @Test func seedsDefaultSunsetWalkOnlyOnce() {
-        let defaults = makeFreshDefaults()
-        let store = RoutineStore(userDefaults: defaults)
-
-        #expect(store.routines.count == 1)
-        #expect(store.routines[0].title == "Sunset Walk")
-        #expect(store.routines[0].templateType == .sunsetWalk)
-        #expect(store.routines[0].sunEventType == .sunset)
-        #expect(store.routines[0].offsetMinutes == 30)
-        #expect(store.routines[0].isBeforeEvent == true)
-
-        // Second init with the same defaults must not reseed.
-        let store2 = RoutineStore(userDefaults: defaults)
-        #expect(store2.routines.count == 1)
-    }
-
-    @Test func deleteDoesNotCauseReseed() {
-        let defaults = makeFreshDefaults()
-        let store = RoutineStore(userDefaults: defaults)
-        #expect(store.routines.count == 1)
-
-        store.delete(id: store.routines[0].id)
+    @Test func freshStoreStartsEmpty() {
+        let store = RoutineStore(userDefaults: makeFreshDefaults())
         #expect(store.routines.isEmpty)
-
-        // The key now holds an empty array — not nil — so a fresh store must not reseed.
-        let store2 = RoutineStore(userDefaults: defaults)
-        #expect(store2.routines.isEmpty, "Reseed must not occur after an explicit delete")
     }
 
     // MARK: - Persistence

@@ -108,8 +108,9 @@ struct RoutinesViewModelTests {
     // MARK: - Free tier limit
 
     @Test func freeUserAtLimitCannotAdd() {
-        // Store seeds 1 routine on init, so a free user is already at the limit.
         let (vm, store) = makeViewModelAndStore(isPlusUser: false)
+        let first = LightRoutine(title: "First", sunEventType: .sunset)
+        vm.addRoutine(first)
         #expect(store.routines.count == 1)
         #expect(!vm.canAddRoutine)
         #expect(vm.isAtFreeLimit)
@@ -120,29 +121,21 @@ struct RoutinesViewModelTests {
     }
 
     @Test func freeUserWithNoRoutinesCanAddOne() {
-        // Build a store without the seed to test the boundary.
-        let defaults = UserDefaults(suiteName: "sunshift.test.noseed.\(UUID().uuidString)")!
-        // Pre-populate with an empty array so seed() is skipped.
-        let emptyData = try! JSONEncoder().encode([LightRoutine]())
-        defaults.set(emptyData, forKey: "sunshift.light_routines")
-
-        let store = RoutineStore(userDefaults: defaults)
-        let sub = SubscriptionService()
-        sub.isPlusUser = false
-        let vm = RoutinesViewModel(store: store, subscriptionService: sub)
-
-        #expect(store.routines.isEmpty)
+        let vm = makeViewModel(isPlusUser: false)
+        #expect(vm.routines.isEmpty)
         #expect(vm.canAddRoutine)
         #expect(!vm.isAtFreeLimit)
 
         let routine = LightRoutine(title: "My First", sunEventType: .sunset)
         vm.addRoutine(routine)
-        #expect(store.routines.count == 1)
+        #expect(vm.routines.count == 1)
         #expect(!vm.canAddRoutine, "Should be at limit after adding one")
     }
 
     @Test func plusUserCanAddBeyondFreeLimit() {
         let (vm, store) = makeViewModelAndStore(isPlusUser: true)
+        let first = LightRoutine(title: "First Routine", sunEventType: .sunset)
+        vm.addRoutine(first)
         #expect(store.routines.count == 1)
         #expect(vm.canAddRoutine)
         #expect(!vm.isAtFreeLimit)
@@ -156,7 +149,8 @@ struct RoutinesViewModelTests {
 
     @Test func editingRoutineUpdatesStoreTitle() {
         let (vm, store) = makeViewModelAndStore()
-        let original = store.routines[0]
+        let original = LightRoutine(title: "Original", sunEventType: .sunset)
+        vm.addRoutine(original)
         var updated = original
         updated.title = "Evening Golden Hour"
         vm.updateRoutine(updated)
@@ -165,7 +159,8 @@ struct RoutinesViewModelTests {
 
     @Test func editingRoutineUpdatesEventType() {
         let (vm, store) = makeViewModelAndStore()
-        let original = store.routines[0]
+        let original = LightRoutine(title: "Walk", sunEventType: .sunset)
+        vm.addRoutine(original)
         var updated = original
         updated.sunEventType = .goldenHourStart
         vm.updateRoutine(updated)
@@ -174,7 +169,8 @@ struct RoutinesViewModelTests {
 
     @Test func editingRoutinePreservesId() {
         let (vm, store) = makeViewModelAndStore()
-        let original = store.routines[0]
+        let original = LightRoutine(title: "Original", sunEventType: .sunset)
+        vm.addRoutine(original)
         let originalId = original.id
         var updated = original
         updated.title = "Changed"
@@ -186,6 +182,8 @@ struct RoutinesViewModelTests {
 
     @Test func toggleEnabledFlipsState() {
         let (vm, store) = makeViewModelAndStore()
+        let routine = LightRoutine(title: "Test", sunEventType: .sunset, isEnabled: true)
+        vm.addRoutine(routine)
         let id = store.routines[0].id
         let wasEnabled = store.routines[0].isEnabled
         vm.toggleEnabled(for: id)
@@ -222,8 +220,10 @@ struct RoutinesViewModelTests {
 
     // MARK: - Onboarding upsert
 
-    @Test func upsertOnboardingRoutineUpdatesSeededRoutineInPlace() {
+    @Test func upsertOnboardingRoutineUpdatesExistingRoutineInPlace() {
         let (vm, store) = makeViewModelAndStore()
+        let existing = LightRoutine(title: "Original Walk", sunEventType: .sunset)
+        store.add(existing)
         #expect(store.routines.count == 1)
 
         let built = LightRoutine(title: "Custom Walk", sunEventType: .goldenHourStart, offsetMinutes: 10, isBeforeEvent: true)
@@ -236,25 +236,21 @@ struct RoutinesViewModelTests {
     }
 
     @Test func upsertOnboardingRoutineAddsWhenStoreIsEmpty() {
-        let defaults = UserDefaults(suiteName: "sunshift.test.upsert.\(UUID().uuidString)")!
-        let emptyData = try! JSONEncoder().encode([LightRoutine]())
-        defaults.set(emptyData, forKey: "sunshift.light_routines")
-        let store = RoutineStore(userDefaults: defaults)
-        let sub = SubscriptionService()
-        let vm = RoutinesViewModel(store: store, subscriptionService: sub)
-
-        #expect(store.routines.isEmpty)
+        let vm = makeViewModel()
+        #expect(vm.routines.isEmpty)
         let built = LightRoutine(title: "Fresh Start", sunEventType: .sunset)
         vm.upsertOnboardingRoutine(built)
-        #expect(store.routines.count == 1)
-        #expect(store.routines[0].title == "Fresh Start")
+        #expect(vm.routines.count == 1)
+        #expect(vm.routines[0].title == "Fresh Start")
     }
 
     // MARK: - Delete
 
     @Test func deleteRemovesRoutineFromStore() {
         let (vm, store) = makeViewModelAndStore(isPlusUser: true)
+        let keeper = LightRoutine(title: "Keeper", sunEventType: .sunset)
         let extra = LightRoutine(title: "Ephemeral", sunEventType: .sunrise)
+        vm.addRoutine(keeper)
         vm.addRoutine(extra)
         #expect(store.routines.count == 2)
 
