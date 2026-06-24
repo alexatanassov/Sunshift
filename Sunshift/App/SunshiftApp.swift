@@ -7,6 +7,7 @@ struct SunshiftApp: App {
     @State private var locationViewModel: LocationViewModel
     @State private var routineStore: RoutineStore
     @State private var routinesViewModel: RoutinesViewModel
+    @State private var notificationPermissionService = NotificationPermissionService()
 
     init() {
         let sub = SubscriptionService()
@@ -25,6 +26,7 @@ struct SunshiftApp: App {
                 .environment(locationViewModel)
                 .environment(routineStore)
                 .environment(routinesViewModel)
+                .environment(notificationPermissionService)
                 .onAppear { locationViewModel.loadInitialLocation() }
         }
     }

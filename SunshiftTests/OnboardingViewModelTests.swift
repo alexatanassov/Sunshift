@@ -38,15 +38,23 @@ struct OnboardingViewModelTests {
         vm.advance()
         #expect(vm.step == .customize)
         vm.advance()
+        #expect(vm.step == .location)
+        vm.advance()
         #expect(vm.step == .confirm)
+        vm.advance()
+        #expect(vm.step == .notifications)
     }
 
     @Test func advanceDoesNotPassLastStep() {
         let vm = OnboardingViewModel()
         OnboardingViewModel.Step.allCases.forEach { _ in vm.advance() }
-        #expect(vm.step == .confirm)
+        #expect(vm.step == .notifications)
         vm.advance()
-        #expect(vm.step == .confirm)
+        #expect(vm.step == .notifications)
+    }
+
+    @Test func stepCountIsCorrect() {
+        #expect(OnboardingViewModel.Step.allCases.count == 6)
     }
 
     @Test func goBackDecrementsStep() {

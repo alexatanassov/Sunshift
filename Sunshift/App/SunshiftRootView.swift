@@ -36,4 +36,5 @@ private struct MainTabView: View {
         .environment(store)
         .environment(RoutinesViewModel(store: store, subscriptionService: sub))
         .environment(LocationViewModel(subscriptionService: sub))
+        .environment(NotificationPermissionService())
 }

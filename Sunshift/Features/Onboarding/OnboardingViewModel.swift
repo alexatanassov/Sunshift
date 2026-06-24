@@ -4,10 +4,12 @@ import Foundation
 final class OnboardingViewModel {
 
     enum Step: Int, CaseIterable {
-        case welcome      = 0
-        case templatePick = 1
-        case customize    = 2
-        case confirm      = 3
+        case welcome        = 0
+        case templatePick   = 1
+        case customize      = 2
+        case location       = 3
+        case confirm        = 4
+        case notifications  = 5
     }
 
     private(set) var step: Step = .welcome

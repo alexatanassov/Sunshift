@@ -4,6 +4,8 @@ struct OnboardingView: View {
     @Environment(AppState.self) private var appState
     @Environment(RoutinesViewModel.self) private var routinesViewModel
     @Environment(SubscriptionService.self) private var subscriptionService
+    @Environment(LocationViewModel.self) private var locationViewModel
+    @Environment(NotificationPermissionService.self) private var notificationPermissionService
 
     @State private var viewModel = OnboardingViewModel()
     @State private var slideFromTrailing = true
@@ -37,8 +39,12 @@ struct OnboardingView: View {
             )
         case .customize:
             CustomizeStep(viewModel: viewModel, onBack: goBack, onContinue: goForward)
+        case .location:
+            LocationStep(onBack: goBack, onContinue: goForward)
         case .confirm:
-            ConfirmStep(viewModel: viewModel, onBack: goBack, onDone: complete)
+            ConfirmStep(viewModel: viewModel, onBack: goBack, onContinue: goForward)
+        case .notifications:
+            NotificationsStep(onBack: goBack, onDone: complete)
         }
     }
 
@@ -216,12 +222,91 @@ private struct CustomizeStep: View {
     }
 }
 
+// MARK: - Location
+
+private struct LocationStep: View {
+    @Environment(LocationViewModel.self) private var locationViewModel
+    let onBack: () -> Void
+    let onContinue: () -> Void
+
+    @State private var hasTriggeredRequest = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            OnboardingNavBar(onBack: onBack)
+
+            Spacer()
+
+            VStack(spacing: SunshiftSpacing.xl) {
+                Image(systemName: "location.circle.fill")
+                    .font(.system(size: 72))
+                    .foregroundStyle(SunshiftColors.sunsetAmber)
+
+                VStack(spacing: SunshiftSpacing.sm) {
+                    Text("Get accurate sunset times")
+                        .font(SunshiftTypography.display(26))
+                        .foregroundStyle(SunshiftColors.primaryText)
+                        .multilineTextAlignment(.center)
+
+                    Text("Sunshift uses your location to calculate sunrise, sunset, and light-based routines.")
+                        .font(SunshiftTypography.body())
+                        .foregroundStyle(SunshiftColors.secondaryText)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(.horizontal, SunshiftSpacing.xl)
+
+            if let error = locationViewModel.userFacingError {
+                Text(error)
+                    .font(SunshiftTypography.caption())
+                    .foregroundStyle(.red.opacity(0.75))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, SunshiftSpacing.xl)
+                    .padding(.top, SunshiftSpacing.md)
+            }
+
+            Spacer()
+
+            VStack(spacing: SunshiftSpacing.sm) {
+                Button(locationViewModel.isLoading ? "Getting location..." : "Use Current Location") {
+                    Task { await requestLocation() }
+                }
+                .buttonStyle(OnboardingPrimaryButtonStyle())
+                .disabled(locationViewModel.isLoading)
+
+                Button("Skip for now", action: onContinue)
+                    .font(SunshiftTypography.body())
+                    .foregroundStyle(SunshiftColors.secondaryText)
+                    .padding(.vertical, SunshiftSpacing.sm)
+            }
+            .padding(.horizontal, SunshiftSpacing.xl)
+            .padding(.bottom, SunshiftSpacing.xxl)
+        }
+        .onChange(of: locationViewModel.isLoading) { _, isLoading in
+            guard hasTriggeredRequest, !isLoading else { return }
+            if locationViewModel.userFacingError == nil {
+                onContinue()
+            }
+        }
+    }
+
+    private func requestLocation() async {
+        hasTriggeredRequest = true
+        await locationViewModel.useCurrentLocation()
+        // If denied, userFacingError is set and the view shows it.
+        // If notDetermined, the system dialog appears; permission change triggers
+        // fetchAndApplyCurrentLocation, which cycles isLoading true -> false.
+        // onChange(of: isLoading) handles auto-advance for both the authorized cases.
+    }
+}
+
 // MARK: - Confirm
 
 private struct ConfirmStep: View {
+    @Environment(LocationViewModel.self) private var locationViewModel
     let viewModel: OnboardingViewModel
     let onBack: () -> Void
-    let onDone: () -> Void
+    let onContinue: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -239,7 +324,96 @@ private struct ConfirmStep: View {
                         .font(SunshiftTypography.display(30))
                         .foregroundStyle(SunshiftColors.primaryText)
 
-                    Text(summaryText)
+                    Text(primarySubtitle)
+                        .font(SunshiftTypography.body())
+                        .foregroundStyle(SunshiftColors.secondaryText)
+                        .multilineTextAlignment(.center)
+
+                    Text(secondarySubtitle)
+                        .font(SunshiftTypography.caption())
+                        .foregroundStyle(SunshiftColors.secondaryText.opacity(0.75))
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(.horizontal, SunshiftSpacing.xl)
+
+            Spacer()
+
+            Button("Continue", action: onContinue)
+                .buttonStyle(OnboardingPrimaryButtonStyle())
+                .padding(.horizontal, SunshiftSpacing.xl)
+                .padding(.bottom, SunshiftSpacing.xxl)
+        }
+    }
+
+    private var scheduledDate: Date? {
+        RoutineScheduler.nextTriggerDate(
+            for: viewModel.buildRoutine(),
+            sunService: SunService(),
+            location: locationViewModel.resolvedLocation,
+            after: Date()
+        )
+    }
+
+    private var primarySubtitle: String {
+        let name = viewModel.selectedTemplate.displayName
+        guard let date = scheduledDate else {
+            return "Your \(name) is ready."
+        }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        let timeStr = formatter.string(from: date)
+        let cal = Calendar.current
+        let dayStr: String
+        if cal.isDateInToday(date) { dayStr = "today" }
+        else if cal.isDateInTomorrow(date) { dayStr = "tomorrow" }
+        else { dayStr = "soon" }
+        return "Your \(name) is set for \(timeStr) \(dayStr)."
+    }
+
+    private var secondarySubtitle: String {
+        guard scheduledDate != nil else {
+            return "It will move automatically as the light changes."
+        }
+        switch viewModel.selectedTemplate.defaultSunEventType {
+        case .sunrise, .firstLight, .civilTwilightStart, .goldenHourStart, .blueHourStart:
+            return "It will move automatically as sunrise changes."
+        case .sunset, .lastLight, .civilTwilightEnd, .goldenHourEnd, .blueHourEnd:
+            return "It will move automatically as sunset changes."
+        case .solarNoon:
+            return "It will move automatically as the sun moves."
+        case .daylightRemaining:
+            return "It will move automatically as the light changes."
+        }
+    }
+}
+
+// MARK: - Notifications
+
+private struct NotificationsStep: View {
+    @Environment(NotificationPermissionService.self) private var notificationPermissionService
+    let onBack: () -> Void
+    let onDone: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            OnboardingNavBar(onBack: onBack)
+
+            Spacer()
+
+            VStack(spacing: SunshiftSpacing.xl) {
+                Image(systemName: "bell.badge.fill")
+                    .font(.system(size: 72))
+                    .foregroundStyle(SunshiftColors.duskPurple)
+
+                VStack(spacing: SunshiftSpacing.sm) {
+                    Text("Get reminded at the right time")
+                        .font(SunshiftTypography.display(26))
+                        .foregroundStyle(SunshiftColors.primaryText)
+                        .multilineTextAlignment(.center)
+
+                    Text("Sunshift needs notifications to remind you when your routine time arrives.")
                         .font(SunshiftTypography.body())
                         .foregroundStyle(SunshiftColors.secondaryText)
                         .multilineTextAlignment(.center)
@@ -249,31 +423,23 @@ private struct ConfirmStep: View {
 
             Spacer()
 
-            Button("Start exploring", action: onDone)
+            VStack(spacing: SunshiftSpacing.sm) {
+                Button("Allow Notifications") {
+                    Task {
+                        await notificationPermissionService.requestPermission()
+                        onDone()
+                    }
+                }
                 .buttonStyle(OnboardingPrimaryButtonStyle())
-                .padding(.horizontal, SunshiftSpacing.xl)
-                .padding(.bottom, SunshiftSpacing.xxl)
-        }
-    }
 
-    private var summaryText: String {
-        let name = viewModel.selectedTemplate.displayName
-        let event = viewModel.selectedTemplate.defaultSunEventType.displayName
-        let days = viewModel.selectedWeekdays.friendlyLabel.lowercased()
-        let offset = viewModel.offsetMinutes
-        if offset == 0 {
-            return "\(name) at \(event), \(days)."
+                Button("Not now", action: onDone)
+                    .font(SunshiftTypography.body())
+                    .foregroundStyle(SunshiftColors.secondaryText)
+                    .padding(.vertical, SunshiftSpacing.sm)
+            }
+            .padding(.horizontal, SunshiftSpacing.xl)
+            .padding(.bottom, SunshiftSpacing.xxl)
         }
-        let dir = viewModel.isBeforeEvent ? "before" : "after"
-        let offsetLabel: String
-        if offset < 60 {
-            offsetLabel = "\(offset) min"
-        } else if offset == 60 {
-            offsetLabel = "1 hr"
-        } else {
-            offsetLabel = "\(offset / 60) hr \(offset % 60) min"
-        }
-        return "\(name), \(offsetLabel) \(dir) \(event), \(days)."
     }
 }
 
@@ -516,6 +682,8 @@ private struct OnboardingPrimaryButtonStyle: ButtonStyle {
         .environment(AppState())
         .environment(RoutinesViewModel(store: RoutineStore(), subscriptionService: SubscriptionService()))
         .environment(SubscriptionService())
+        .environment(LocationViewModel(subscriptionService: SubscriptionService()))
+        .environment(NotificationPermissionService())
 }
 
 #Preview("Template Pick") {
@@ -526,6 +694,17 @@ private struct OnboardingPrimaryButtonStyle: ButtonStyle {
     CustomizeStep(viewModel: OnboardingViewModel(), onBack: {}, onContinue: {})
 }
 
+#Preview("Location") {
+    LocationStep(onBack: {}, onContinue: {})
+        .environment(LocationViewModel(subscriptionService: SubscriptionService()))
+}
+
 #Preview("Confirm") {
-    ConfirmStep(viewModel: OnboardingViewModel(), onBack: {}, onDone: {})
+    ConfirmStep(viewModel: OnboardingViewModel(), onBack: {}, onContinue: {})
+        .environment(LocationViewModel(subscriptionService: SubscriptionService()))
+}
+
+#Preview("Notifications") {
+    NotificationsStep(onBack: {}, onDone: {})
+        .environment(NotificationPermissionService())
 }
