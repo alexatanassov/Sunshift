@@ -1,6 +1,6 @@
 import Foundation
 
-struct LightRoutine: Identifiable {
+struct LightRoutine: Identifiable, Codable, Equatable {
     let id: UUID
     var title: String
     var templateType: RoutineTemplate?

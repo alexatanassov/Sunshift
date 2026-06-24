@@ -41,6 +41,27 @@ extension SunSchedule {
         return set.timeIntervalSince(now)
     }
 
+    // MARK: - Event Lookup
+
+    /// Returns the point-in-time Date for a given SunEventType, or nil for non-point types
+    /// (e.g. daylightRemaining) or when the event did not occur (polar day/night).
+    func event(for type: SunEventType) -> Date? {
+        switch type {
+        case .sunrise:            return sunrise
+        case .sunset:             return sunset
+        case .solarNoon:          return solarNoon
+        case .goldenHourStart:    return goldenHourStart
+        case .goldenHourEnd:      return goldenHourEnd
+        case .blueHourStart:      return blueHourStart
+        case .blueHourEnd:        return blueHourEnd
+        case .firstLight:         return firstLight
+        case .lastLight:          return lastLight
+        case .civilTwilightStart: return civilTwilightStart
+        case .civilTwilightEnd:   return civilTwilightEnd
+        case .daylightRemaining:  return nil
+        }
+    }
+
     // MARK: - Next Event
 
     /// The next scheduled event strictly after `now`, or `nil` if all events have passed.
