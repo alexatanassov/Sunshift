@@ -4,9 +4,9 @@ Alarms that move with the sun. Sunshift lets users build routines anchored to so
 
 ---
 
-## Current Stage: Stage 3 - Today Screen
+## Current Stage: Stage 4 - Routine System
 
-The Today screen is complete. `TodayViewModel` computes all UI state from the active location and `SunService`. `TodayView` displays a hero card with a live next-event countdown and daylight remaining, a day timeline visualization, a solar events reference card, and a next routine placeholder. All states are handled: loading, error, fallback location, and no location set.
+The routine system is complete. `LightRoutine` is a fully-specified model with title, solar event anchor, before/after offset, weekday selection, enable/disable flag, and notification message. `RoutineStore` persists routines to `UserDefaults` and seeds a default "Sunset Walk" routine on first launch. `RoutineScheduler` computes the next trigger date by scanning up to 8 days forward and accounting for disabled routines, inactive weekdays, and unavailable solar events. `RoutinesViewModel` enforces the free-tier limit (1 routine) and exposes display helpers for the list. `RoutinesView` shows a full routine list with per-row enable toggles, and `RoutineEditView` handles both create and edit modes with a template picker, timing controls, weekday chips, and a delete action. The Today screen `NextRoutineCard` is wired to real data from `RoutineStore` and `RoutineScheduler`.
 
 ---
 
@@ -112,7 +112,8 @@ Sunshift/
 │   │   ├── TodayView.swift              # Main Today tab; routes between empty, loading, error, and content states
 │   │   └── TodayTimelineView.swift      # Horizontal day timeline bar with gradient and now-indicator dot
 │   ├── Routines/
-│   │   └── RoutinesView.swift           # Placeholder - will list and manage light routines
+│   │   ├── RoutinesView.swift           # Routine list: rows with enable toggle, create/edit sheet entry points
+│   │   └── RoutineEditView.swift        # Create/edit sheet: name, template picker, timing, weekday chips, delete
 │   ├── Locations/
 │   │   ├── LocationsView.swift          # Permission cards, active location display, saved list
 │   │   └── ManualLocationEntryView.swift # Manual lat/lon/timezone entry form with validation
@@ -129,21 +130,23 @@ Sunshift/
 │   ├── SunCalculationError.swift        # invalidCoordinates, invalidTimeZone, calculationFailed
 │   ├── SunCalculationInput.swift        # Input type: date, latitude, longitude, timeZoneIdentifier
 │   ├── SunSchedule.swift                # Output type: all computed solar events for one local day
-│   ├── SunSchedule+Events.swift         # orderedEvents, nextEvent(after:), daylightRemaining(at:)
+│   ├── SunSchedule+Events.swift         # orderedEvents, nextEvent(after:), daylightRemaining(at:), event(for:)
 │   ├── SunEvent.swift                   # Single solar event (type + time)
-│   ├── SunEventType.swift               # Enum: sunrise, solarNoon, sunset, goldenHour, twilight...
-│   ├── LightRoutine.swift               # User-defined routine anchored to a solar event
-│   ├── ReminderOffset.swift             # Offset (+/- minutes) from a solar event
+│   ├── SunEventType.swift               # Enum with routineTriggerCases (excludes daylightRemaining)
+│   ├── LightRoutine.swift               # User-defined routine: event anchor, offset, weekdays, enabled flag
+│   ├── ReminderOffset.swift             # Offset enum: atEvent, preset(minutes:), custom(minutes:)
 │   ├── SavedLocation.swift              # Named lat/lon; includes source, isCurrentLocation, isHomeLocation
-│   ├── WeekdaySelection.swift           # Bitmask-style weekday picker model
-│   └── SubscriptionTier.swift           # .free / .plus; FreeTierLimits (maxSavedLocations = 1)
+│   ├── WeekdaySelection.swift           # OptionSet bitmask; everyday/weekdays/weekends presets + friendlyLabel
+│   └── SubscriptionTier.swift           # .free / .plus; RoutineTemplate enum; FreeTierLimits
 ├── Services/
 │   ├── DeviceLocationService.swift      # CLLocationManager wrapper; one-shot requestLocation()
 │   ├── LocationGeocodingService.swift   # CLGeocoder reverse geocoding; builds SavedLocation from placemark
 │   ├── LocationStore.swift              # @Observable; persists savedLocations + activeLocationID to UserDefaults
+│   ├── RoutineStore.swift               # @Observable; persists [LightRoutine] to UserDefaults; seeds on first launch
+│   ├── RoutineScheduler.swift           # Static; nextTriggerDate scans up to 8 days, respects weekdays and offsets
 │   ├── SunService.swift                 # NOAA-style solar position engine; no network required
 │   ├── SunService+NextRelevantEvent.swift # Cross-midnight next-event fallback
-│   └── SubscriptionService.swift        # @Observable service wrapping subscription state
+│   └── SubscriptionService.swift        # @Observable service wrapping subscription state and feature gates
 ├── Storage/
 │   └── UserPreferences.swift            # UserDefaults-backed persistence layer (placeholder)
 ├── Utilities/
@@ -151,7 +154,8 @@ Sunshift/
 │   └── TimeIntervalExtensions.swift     # Human-readable duration formatting
 └── ViewModels/
     ├── LocationViewModel.swift          # @Observable; coordinates permission, GPS, geocoding, persistence
-    └── TodayViewModel.swift             # @Observable; computes all Today UI state from location + SunService
+    ├── RoutinesViewModel.swift          # @Observable; free-tier gate, display helpers, delegates to RoutineStore
+    └── TodayViewModel.swift             # @Observable; computes Today UI state + next-routine card from RoutineStore
 
 Docs/
 └── SUNSHIFT_V1_PLAN.md            # Full v1 product plan and stage breakdown
@@ -315,17 +319,36 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 | Polar edge cases | Hero and timeline both handle polar day (no sunset) and polar night (no sunrise/sunset) with appropriate copy and gradient |
 | Location reactivity | `TodayView` refreshes via `.onChange(of: locationViewModel.resolvedLocation.id)` so the display updates immediately when the user switches active location |
 
+## Implemented in Stage 4
+
+| Area | What's in place |
+|---|---|
+| `LightRoutine` model | Fully-specified value type: title, template reference, solar event anchor, offset (minutes + direction), weekday selection, location ID, enabled flag, notification message, created/updated timestamps |
+| `RoutineTemplate` | Enum in `SubscriptionTier.swift`: sunsetWalk, morningLight, windDown, goldenHourShoot, custom; each carries default event, offset, direction, and notification message; `requiresPlus` gate |
+| `WeekdaySelection` | `OptionSet` bitmask (7 bits); everyday/weekdays/weekends presets; `contains(calendarWeekday:)` maps `Calendar.weekday` (1=Sun...7=Sat); `friendlyLabel` produces human-readable summary |
+| `ReminderOffset` | Enum with `.atEvent`, `.preset(minutes:)`, `.custom(minutes:)`; named presets at 5, 10, 15, 30, 60 minutes |
+| `RoutineStore` | `@Observable`; persists `[LightRoutine]` to `UserDefaults` key `sunshift.light_routines` as JSON; seeds default "Sunset Walk" on first launch when the key is absent; `add`, `update`, `toggleEnabled`, `delete` mutations |
+| Default seed | "Sunset Walk" -- 30 min before sunset, every day, enabled; seeded exactly once on first launch |
+| `RoutineScheduler` | Static struct; `nextTriggerDate(for:sunService:location:after:)` scans today through the next 7 days; applies weekday filter, resolves the solar event via `SunSchedule.event(for:)`, applies the before/after offset, returns the first trigger strictly after `now` |
+| `SunEventType` additions | `routineTriggerCases` excludes `.daylightRemaining` (duration, not a point in time); `SunSchedule.event(for:)` resolves any trigger case to a `Date?` |
+| `RoutinesViewModel` | `@Observable`; `canAddRoutine` and `isAtFreeLimit` enforce `FreeTierLimits.maxActiveRoutines = 1` for free users; `triggerDescription(for:)` and `activeDaysSummary(for:)` produce display strings; mutations delegate to `RoutineStore` |
+| Routine list screen | `RoutinesView`: `NavigationStack` with per-routine rows showing event icon, title, trigger description, day summary; inline enable toggle (`checkmark.circle.fill` / `circle`); "+" toolbar button hidden when `isAtFreeLimit`; free-limit hint card; empty state |
+| Routine edit screen | `RoutineEditView`: `.create` and `.edit(LightRoutine)` modes; name field; template picker (create mode only) with Plus badges and preview text; timing section (event picker from `routineTriggerCases`, offset picker, before/after segmented picker); `WeekdayChipRow` with accessibility labels; notification message field with Plus gate hint; enabled toggle; delete button (edit mode only) |
+| Template picker | Applies template defaults (event, offset, direction, message) when selected; auto-fills name when the current name is empty or matches a template name |
+| `SubscriptionService` additions | `canUseCustomNotificationMessages`, `canUseTemplate(_:)` feature gates; `FreeTierLimits.maxActiveRoutines = 1`, `allowedTemplates = [.sunsetWalk, .custom]` |
+| Today screen connection | `TodayView` reads `RoutineStore` via `@Environment`; passes first enabled routine to `TodayViewModel.refresh(enabledRoutine:)`; `TodayViewModel.updateRoutineState` calls `RoutineScheduler.nextTriggerDate` and populates `nextRoutineName`, `nextRoutineTimeText`, `nextRoutineTriggerText`; `NextRoutineCard` shows real data or "Not available today" when the scheduler returns nil; shows "No routines yet" when no enabled routine exists; reactive via `.onChange(of: routineStore.routines)` |
+| App entry point | `SunshiftApp` initializes `RoutineStore` and `RoutinesViewModel`; both injected into the environment alongside `SubscriptionService` and `LocationViewModel` |
+| Free vs Plus foundation | Free: 1 routine, sunsetWalk and custom templates, no custom notification messages. Plus: unlimited routines, all templates, custom messages. No real StoreKit purchase flow yet. |
+
 ---
 
 ## Upcoming Stages
 
 | Stage | Focus |
 |---|---|
-| 4 | Routine Model + Logic - full `LightRoutine` lifecycle, weekday selection, offset scheduling |
-| 5 | Create Routine Flow - routine creation UI, user-facing routine editor |
-| 6 | Notification Scheduling - `UNUserNotificationCenter` integration, offset-aware triggers |
-| 7 | Free vs Plus System - feature gates, `SubscriptionService` wired to StoreKit 2 |
-| 8 | Premium Feature Buildout - unlimited routines, multiple locations, advanced offsets |
-| 9 | Widgets + Travel Mode - WidgetKit extension, automatic location updates when traveling |
-| 10 | Polish + App Store Launch - accessibility, localization, App Store assets, review prompts |
+| 5 | Notification Scheduling - `UNUserNotificationCenter` integration, offset-aware triggers, permission request |
+| 6 | Free vs Plus System - feature gates wired to StoreKit 2 real purchases, paywall screen |
+| 7 | Premium Feature Buildout - unlimited routines, multiple locations, advanced offsets |
+| 8 | Widgets + Travel Mode - WidgetKit extension, automatic location updates when traveling |
+| 9 | Polish + App Store Launch - accessibility, localization, App Store assets, review prompts |
 

@@ -302,6 +302,157 @@ The Today screen follows the app's design personality: warm, simple, premium, un
 
 ---
 
+## Stage 4: Routine System
+
+Stage 4 implements the full routine lifecycle from model definition through persistence, scheduling, and UI. Routines are now real objects -- not placeholders -- and the Today screen Next Routine card reflects actual data.
+
+### Model: LightRoutine
+
+`LightRoutine` is a `Codable`, `Identifiable`, `Equatable` struct. Its fields:
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | `UUID` | Stable identity across saves |
+| `title` | `String` | User-editable display name |
+| `templateType` | `RoutineTemplate?` | Template used to create the routine, if any |
+| `sunEventType` | `SunEventType` | Solar event that anchors the trigger |
+| `offsetMinutes` | `Int` | Magnitude of the offset from the anchor event |
+| `isBeforeEvent` | `Bool` | `true` = offset subtracts from the event time |
+| `selectedWeekdays` | `WeekdaySelection` | Bitmask of active days |
+| `locationId` | `UUID?` | Reserved for future per-routine location; unused in Stage 4 |
+| `isEnabled` | `Bool` | When `false`, the routine is skipped by the scheduler |
+| `notificationMessage` | `String` | Custom push copy; Plus-gated in the UI |
+| `createdAt` / `updatedAt` | `Date` | Timestamps; `updatedAt` is refreshed on every mutation |
+
+### Model: RoutineTemplate
+
+`RoutineTemplate` is a `CaseIterable`, `Codable` enum defined in `SubscriptionTier.swift`. It provides default values that pre-fill the create form.
+
+| Template | Event | Offset | Direction | Requires Plus |
+|---|---|---|---|---|
+| `sunsetWalk` | Sunset | 30 min | Before | No |
+| `morningLight` | Sunrise | 15 min | After | Yes |
+| `windDown` | Sunset | 30 min | After | Yes |
+| `goldenHourShoot` | Golden Hour Start | 10 min | Before | Yes |
+| `custom` | Sunset | 0 | -- | No |
+
+Free users see all templates in the picker but Plus templates are labelled and cannot be selected without a subscription.
+
+### Default Seeded Routine
+
+`RoutineStore.seed()` runs once on first launch when the `sunshift.light_routines` key is absent from `UserDefaults`. It creates a "Sunset Walk" routine using the `sunsetWalk` template defaults: 30 min before sunset, every day, enabled. This gives every new user an immediately working routine without requiring any setup.
+
+### RoutineStore Persistence
+
+`RoutineStore` is `@Observable`. It persists `[LightRoutine]` to `UserDefaults` under the key `sunshift.light_routines` as JSON via `Codable`. All mutations (`add`, `update`, `toggleEnabled`, `delete`) write synchronously after each change. `toggleEnabled` also stamps `updatedAt`. The store seeds on first launch and is safe to call `load()` when the key is missing (no-op).
+
+### RoutineScheduler
+
+`RoutineScheduler.nextTriggerDate(for:sunService:location:after:)` is a static function that finds the next valid trigger time for a routine:
+
+1. Returns `nil` immediately if `routine.isEnabled` is `false`.
+2. Builds a `Calendar` anchored to the location's timezone (`TimeZone(identifier:) ?? .current`).
+3. Iterates `dayOffset` in `0..<8` (today through 7 days ahead).
+4. Skips days where `routine.selectedWeekdays.contains(calendarWeekday:)` is `false`.
+5. Computes the day's `SunSchedule` via `SunService.sunSchedule(for:)`. Skips days where the call throws.
+6. Resolves the anchor event via `SunSchedule.event(for: routine.sunEventType)`. Skips days where the event is `nil` (polar conditions, or a non-point event type).
+7. Applies the offset: `trigger = isBeforeEvent ? eventDate - offsetSeconds : eventDate + offsetSeconds`.
+8. Returns `trigger` if it is strictly after `now`; otherwise continues.
+9. Returns `nil` if no trigger is found in the 8-day window.
+
+### WeekdaySelection
+
+`WeekdaySelection` is an `OptionSet` with a 7-bit `Int` `rawValue` (one bit per day, Sunday through Saturday). Named presets: `.everyday`, `.weekdays`, `.weekends`. `contains(calendarWeekday:)` maps `Calendar.weekday` integers (1=Sunday, 2=Monday, ..., 7=Saturday) to the correct bit. `friendlyLabel` returns "Every day", "Weekdays", "Weekends", or a comma-joined list of abbreviated day names.
+
+### Before/After Offsets
+
+The offset system uses two fields on `LightRoutine`: `offsetMinutes` (the magnitude) and `isBeforeEvent` (the direction). `ReminderOffset` is a separate enum used only in the edit UI to present named presets (at event, 5, 10, 15, 30, 60 minutes). When the user picks a preset, `offsetMinutes` is set from `ReminderOffset.offsetMinutes`. The direction picker (Before / After) is only shown when `offsetMinutes > 0`.
+
+### Location and Timezone Handling
+
+`RoutineScheduler` and `TodayViewModel` both derive the working `Calendar` from the location's `timeZoneIdentifier`. The fallback chain is: `TimeZone(identifier: location.timeZoneIdentifier) ?? .current`. This means the scheduler correctly handles locations in non-device timezones and degrades gracefully when a stored timezone identifier is stale or malformed.
+
+`locationId` on `LightRoutine` is present in the model but unused in Stage 4. All routines evaluate against the user's active location. Per-routine location overrides are a post-Stage 4 concern.
+
+### RoutinesViewModel
+
+`RoutinesViewModel` is `@Observable` and is the single ViewModel for the Routines tab. It holds references to `RoutineStore` and `SubscriptionService`.
+
+- `canAddRoutine`: `true` when the user is Plus or the routine count is below `FreeTierLimits.maxActiveRoutines` (1).
+- `isAtFreeLimit`: `true` when the user is Free and already has 1 routine.
+- `triggerDescription(for:)`: returns "At Sunset" (zero offset) or "30 min before Sunset".
+- `activeDaysSummary(for:)`: returns `selectedWeekdays.friendlyLabel`.
+- All mutations delegate to `RoutineStore`.
+
+### Routine List Screen
+
+`RoutinesView` renders the routine list in a `NavigationStack`. Each routine appears as a `RoutineRow` card:
+
+- Solar event icon (SF Symbol, color-keyed to event type).
+- Title, trigger description, and day summary stacked vertically.
+- A `checkmark.circle.fill` / `circle` toggle overlaid at the trailing edge for enable/disable.
+- Tapping the main area opens the edit sheet.
+- Disabled routines render at 60% opacity.
+- Accessibility: combined label reads title, trigger, days, and enabled state.
+
+The "+" toolbar button is hidden when `isAtFreeLimit`. A soft purple hint card appears below the list when the free limit is reached. An empty state with an icon and instructional copy is shown when no routines exist.
+
+### Routine Edit Screen
+
+`RoutineEditView` is a sheet-presented form that handles both `.create` and `.edit(LightRoutine)` modes.
+
+- **Name section:** text field; Save button is disabled when trimmed name is empty.
+- **Template section (create mode only):** list of `RoutineTemplate.allCases`; Plus templates show a "Plus" badge; selecting a template applies its defaults to all other fields and auto-fills the name if it is empty or matches a template name.
+- **Timing section:** event picker from `SunEventType.routineTriggerCases`; offset picker from `ReminderOffset.presets`; before/after segmented picker (hidden when offset is 0).
+- **Schedule section:** `WeekdayChipRow` -- seven circular chips (S M T W T F S), amber when active; footer shows `friendlyLabel`.
+- **Notification section:** multi-line text field; a Plus hint is shown in the footer when `!subscriptionService.canUseCustomNotificationMessages`.
+- **Status section:** enabled toggle.
+- **Delete section (edit mode only):** destructive button.
+
+### Today Screen Connection
+
+`TodayView` reads `RoutineStore` from `@Environment`. Its `refresh()` function picks `routineStore.routines.first(where: { $0.isEnabled })` and passes it to `TodayViewModel.refresh(enabledRoutine:)`. The view adds `.onChange(of: routineStore.routines) { refresh() }` so the card updates immediately when routines are created, edited, or toggled.
+
+`TodayViewModel.updateRoutineState` calls `RoutineScheduler.nextTriggerDate` with the active location and the current time to compute the displayed fire time. `nextRoutineTimeText` is set to the formatted time (e.g. "6:47 PM") or "Not available today" when the scheduler returns `nil`. `nextRoutineTriggerText` shows the offset description (e.g. "30 min before Sunset").
+
+`NextRoutineCard` has two states:
+- **Routine present:** shows the routine name, next fire time, and offset description.
+- **No enabled routine:** shows "No routines yet" with a prompt to the Routines tab.
+
+### Free vs Plus Foundation for Routines
+
+| Capability | Free | Plus |
+|---|---|---|
+| Active routines | 1 (`FreeTierLimits.maxActiveRoutines`) | Unlimited |
+| Templates | Sunset Walk, Custom | All templates |
+| Custom notification messages | No | Yes |
+| Custom offsets (model level) | Yes (any value stored) | Yes |
+
+The model stores any offset value regardless of tier. UI restrictions are applied at the edit layer via `SubscriptionService` gates. No real StoreKit purchase flow exists yet; `isPlusUser` is toggled directly on `SubscriptionService` for development.
+
+### Edge Cases
+
+**Event already passed today:** On `dayOffset = 0`, the scheduler computes the trigger time and compares it against `now`. If `trigger <= now`, iteration continues to the next day. The first day where `trigger > now` is returned.
+
+**Inactive weekday:** `routine.selectedWeekdays.contains(calendarWeekday:)` is checked before computing the schedule. Non-matching days are skipped with `continue`.
+
+**Disabled routine:** `guard routine.isEnabled else { return nil }` is the first check in `nextTriggerDate`. Disabled routines return `nil` immediately.
+
+**Unavailable sun event (polar day/night):** `SunSchedule.event(for:)` returns `nil` when the requested event did not occur. The scheduler skips that day with `continue`. If the event is unavailable for all 8 days (extreme polar conditions), the scheduler returns `nil` and the Today card shows "Not available today".
+
+**Timezone fallback:** `TimeZone(identifier: location.timeZoneIdentifier) ?? .current` is applied in both `RoutineScheduler` and `TodayViewModel`. A stale or malformed timezone identifier degrades to the device timezone rather than crashing.
+
+### What Is Intentionally Not Included in Stage 4
+
+- **Notification scheduling:** `UNUserNotificationCenter` is not called. `nextTriggerDate` computes the correct time but does not create a system notification. This is Stage 5.
+- **Notification permission request:** No `UNUserNotificationCenter.requestAuthorization` call. The notification message field is present in the edit UI but has no live effect.
+- **Widgets:** WidgetKit is post-Stage 4. `RoutineStore` and `RoutineScheduler` are designed to be accessible from a widget extension but the extension does not exist yet.
+- **Full paywall:** `SubscriptionService.isPlusUser` is a manually toggled Bool. StoreKit 2 purchase and restore flows are stubbed but not implemented.
+- **Advanced routine templates beyond the 4 seeded templates:** The template enum can be extended, but no additional templates are defined beyond sunsetWalk, morningLight, windDown, goldenHourShoot, and custom.
+- **Per-routine location overrides:** `LightRoutine.locationId` is stored but not used. All routines evaluate against the active location.
+
+---
+
 ## Post-1.0 Future Features
 
 These are not in scope for v1 but are worth keeping in mind to avoid closing off architectural doors.
