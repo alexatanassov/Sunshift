@@ -4,9 +4,9 @@ Alarms that move with the sun. Sunshift lets users build routines anchored to so
 
 ---
 
-## Current Stage: Stage 2 - Location System
+## Current Stage: Stage 3 - Today Screen
 
-The location system is complete. `LocationViewModel` coordinates CoreLocation permission, one-shot GPS fetch, reverse geocoding, and persistence through `LocationStore`. `TodayView` feeds the active location directly into `SunService` so solar times always reflect where the user is.
+The Today screen is complete. `TodayViewModel` computes all UI state from the active location and `SunService`. `TodayView` displays a hero card with a live next-event countdown and daylight remaining, a day timeline visualization, a solar events reference card, and a next routine placeholder. All states are handled: loading, error, fallback location, and no location set.
 
 ---
 
@@ -109,7 +109,8 @@ Sunshift/
 │   ├── Onboarding/
 │   │   └── OnboardingView.swift         # Shown on first launch; sets hasCompletedOnboarding
 │   ├── Today/
-│   │   └── TodayView.swift              # Solar event cards; reads active location from LocationViewModel
+│   │   ├── TodayView.swift              # Main Today tab; routes between empty, loading, error, and content states
+│   │   └── TodayTimelineView.swift      # Horizontal day timeline bar with gradient and now-indicator dot
 │   ├── Routines/
 │   │   └── RoutinesView.swift           # Placeholder - will list and manage light routines
 │   ├── Locations/
@@ -149,7 +150,8 @@ Sunshift/
 │   ├── DateExtensions.swift             # Date formatting and local-day comparison helpers
 │   └── TimeIntervalExtensions.swift     # Human-readable duration formatting
 └── ViewModels/
-    └── LocationViewModel.swift          # @Observable; coordinates permission, GPS, geocoding, persistence
+    ├── LocationViewModel.swift          # @Observable; coordinates permission, GPS, geocoding, persistence
+    └── TodayViewModel.swift             # @Observable; computes all Today UI state from location + SunService
 
 Docs/
 └── SUNSHIFT_V1_PLAN.md            # Full v1 product plan and stage breakdown
@@ -295,13 +297,32 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 
 ---
 
+## Implemented in Stage 3
+
+| Area | What's in place |
+|---|---|
+| ViewModel | `TodayViewModel` - `@Observable`; takes a `SavedLocation` and `now`, calls `SunService`, and exposes all formatted strings for the view layer |
+| Hero card | Gradient card showing next event name + countdown (e.g. "Sunset in 2h 14m"), daylight remaining, a contextual one-line hint, and the active location name with a "Sample" badge when using the fallback |
+| Daylight remaining | Derived from `SunSchedule.daylightRemaining(at:)` via `TimeIntervalExtensions.formattedDaylightRemaining`; clears to "Sun has set" after sunset |
+| Next event countdown | Resolved via `SunService.nextRelevantEvent(after:schedule:input:)`; falls back to the next day's schedule when today's events are exhausted; formatted via `formattedCountdown` |
+| Events reference | Card showing sunrise, sunset, evening golden hour start, and last light times; swaps to polar-day or polar-night copy when sunrise/sunset are nil |
+| Day timeline | `TodayTimelineView` - horizontal capsule bar with a multi-stop gradient keyed to the day's actual solar events (first light through last light); a white dot with a color-matched inner circle tracks the current time |
+| Next routine placeholder | `NextRoutineCard` showing a hardcoded "Sunset Walk" entry (30 min before sunset) with the computed walk time; labeled as a placeholder for Stage 4 |
+| Loading state | Shown until `TodayViewModel.hasRefreshed` is true |
+| Error state | Shown when `SunService` throws; includes a "Try Again" button that re-calls `refresh()` |
+| Empty state | Shown when no active location has been set; prompts the user to the Locations tab |
+| Fallback badge | "Sample" chip in the hero card when `isUsingFallback` is true (San Diego placeholder data) |
+| Polar edge cases | Hero and timeline both handle polar day (no sunset) and polar night (no sunrise/sunset) with appropriate copy and gradient |
+| Location reactivity | `TodayView` refreshes via `.onChange(of: locationViewModel.resolvedLocation.id)` so the display updates immediately when the user switches active location |
+
+---
+
 ## Upcoming Stages
 
 | Stage | Focus |
 |---|---|
-| 3 | Today Screen - live solar timeline, next event countdown, active routines for today |
 | 4 | Routine Model + Logic - full `LightRoutine` lifecycle, weekday selection, offset scheduling |
-| 5 | Create Routine Flow + Onboarding - routine creation UI, onboarding walkthrough |
+| 5 | Create Routine Flow - routine creation UI, user-facing routine editor |
 | 6 | Notification Scheduling - `UNUserNotificationCenter` integration, offset-aware triggers |
 | 7 | Free vs Plus System - feature gates, `SubscriptionService` wired to StoreKit 2 |
 | 8 | Premium Feature Buildout - unlimited routines, multiple locations, advanced offsets |

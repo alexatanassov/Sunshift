@@ -202,6 +202,106 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 
 ---
 
+## Stage 3: Today Screen
+
+Stage 3 builds the primary user-facing screen. The Today tab is the first thing users see on every launch. It must be immediately useful, visually calm, and accurate to real location data.
+
+### Architecture
+
+`TodayViewModel` owns all display state for the Today tab. It is `@Observable` and stateless between calls -- `refresh(location:isUsingFallback:now:)` recomputes everything from scratch. `TodayView` calls `refresh` on `.task` and again via `.onChange(of: locationViewModel.resolvedLocation.id)` so the display stays in sync when the user switches active locations.
+
+`TodayView` reads `resolvedLocation` and `isUsingFallback` from `LocationViewModel` (injected via `@Environment`) and passes them into the ViewModel. The view itself handles state routing: it shows an empty state, loading state, error state, or the full content stack depending on which flags are set.
+
+### Real active location data
+
+`TodayViewModel.refresh` accepts a `SavedLocation`. It extracts `latitude`, `longitude`, and `timeZoneIdentifier` to build a `SunCalculationInput`, then calls `SunService.sunSchedule(for:)`. Because `LocationViewModel.resolvedLocation` always returns a valid location (real or San Diego fallback), the ViewModel always has something to compute from.
+
+`locationKind` is resolved from `isUsingFallback` and `location.isCurrentLocation`:
+- `.fallback` -- San Diego placeholder, nothing real has been set
+- `.current` -- active GPS position
+- `.saved` -- user-saved named place
+
+### SunService schedule connection
+
+`TodayViewModel` calls two methods on `SunService`:
+- `sunSchedule(for:)` -- computes the full `SunSchedule` for the active location and local calendar date
+- `nextRelevantEvent(after:schedule:input:)` (from `SunService+NextRelevantEvent`) -- finds the next solar event; if today's events are exhausted, falls back to the next day's schedule
+
+All formatted strings (`sunriseText`, `sunsetText`, `goldenHourText`, `lastLightText`) are computed once in `refresh` and exposed as `String` properties. The view layer does no formatting.
+
+### Hero card
+
+The hero card (`HeroCard`) is the visual anchor of the screen. It shows:
+
+- **Next event countdown** -- the next solar event name rewritten in natural language (e.g. "Sunset in 2h 14m") in large display type. Shows "All done for today" after the last event, or "Night all day" for polar night.
+- **Contextual hint** -- a one-line sentence keyed to the next event name (e.g. "The sky is about to put on a show" before sunset). Helps the screen feel alive rather than just informational.
+- **Daylight remaining** -- formatted as "Xh Ym of daylight left"; switches to "Sun has set" after sunset; shows "Daylight all day" for polar day.
+- **Location name** -- shown in the footer with a pin icon. Displays a "Sample" chip in amber when `locationKind == .fallback` so placeholder data is never silently presented as real.
+- **Gradient** -- adapts to the time of day. Uses `SunshiftGradients.sunrise` during daylight, `SunshiftGradients.dusk` after sunset, `SunshiftGradients.night` for polar night.
+
+### Daylight remaining
+
+`daylightRemainingText` calls `SunSchedule.daylightRemaining(at: now)` and formats the result with `TimeIntervalExtensions.formattedDaylightRemaining`. Returns `nil` after sunset (which the hero card renders as "Sun has set") and `nil` for polar conditions (handled separately).
+
+### Next light event countdown
+
+`nextEventTitle` and `nextEventCountdownText` are set from the result of `SunService.nextRelevantEvent(after:schedule:input:)`. The countdown interval is formatted by `TimeIntervalExtensions.formattedCountdown`. `TodayViewModel` does not start a live timer; callers are expected to re-call `refresh` periodically or on significant time changes.
+
+### Sunrise, sunset, golden hour, and last light
+
+`EventsSection` shows four rows in a card:
+- Sunrise (time of first solar limb crossing)
+- Sunset (evening crossing)
+- Golden Hour (start of evening golden hour, i.e. `goldenHourEnd` from `SunSchedule`)
+- Last Light (civil dusk, `lastLight`)
+
+For polar day and polar night, the sunrise/sunset rows are replaced with a context row ("The sun doesn't set today" or "No sunrise today") and only golden hour and last light are shown.
+
+### Day timeline visualization
+
+`TodayTimelineView` renders a horizontal capsule bar representing the day's light progression. Key details:
+
+- **Range** -- from one hour before first light to one hour after last light (or midnight if those events are nil). This keeps the bar from spanning a full 24 hours when daylight is limited.
+- **Gradient** -- multi-stop `LinearGradient` with stops keyed to the actual times of first light, blue hour start, sunrise, golden hour start, solar noon, golden hour end, sunset, blue hour end, and last light. The colors run from `nightNavy` through dawn blue, peach, gold, bright day, amber, dusk purple, and back to night.
+- **Now indicator** -- a white circle with a color-matched inner dot tracks the current time along the bar. The inner dot color is resolved from which light phase `now` falls in (night, dawn, morning golden hour, day, evening golden hour, dusk, or night).
+- **Labels** -- sunrise and sunset times appear below the bar at their proportional positions.
+- **Polar states** -- when there is no sunrise or sunset, the timeline shows a text row ("Daylight all day" or "No sunrise today") instead of the bar.
+
+### Next routine placeholder
+
+`NextRoutineCard` is a static placeholder representing the "Sunset Walk" routine (30 minutes before sunset). It shows the routine name, the anchor description, and the computed walk time derived from `sunset - 30 minutes`. A footer note ("Routine scheduling comes next.") marks this as a pre-Stage 4 placeholder. The card structure and layout match what the real routine cards will look like.
+
+### Loading, error, fallback, and empty states
+
+| State | Trigger | What the user sees |
+|---|---|---|
+| Empty | `locationViewModel.activeLocation == nil` | Icon + copy directing the user to the Locations tab |
+| Loading | `!viewModel.hasRefreshed` | Amber `ProgressView` spinner |
+| Error | `viewModel.errorMessage != nil` | Message + "Try Again" button that re-calls `refresh()` |
+| Fallback | `locationViewModel.isUsingFallback` | Full content, but hero card shows a "Sample" chip next to the location name |
+| Polar day | `schedule.sunrise == nil && schedule.sunset == nil && schedule.solarNoon != nil` | "Daylight all day" in hero and timeline; adjusted events card |
+| Polar night | `schedule.sunrise == nil && schedule.sunset == nil && schedule.solarNoon == nil` | "Night all day" in hero; night gradient; adjusted events card |
+
+### Design tone
+
+The Today screen follows the app's design personality: warm, simple, premium, uncluttered. Key decisions:
+
+- Large display type for the countdown draws the eye immediately.
+- Contextual hint copy keeps the screen conversational without being wordy.
+- The gradient card and timeline are the only visual "heavy" elements; everything else is flat cards on a warm background.
+- No icons in the hero -- the gradient carries the mood.
+- Monospaced digits on time strings prevent layout jitter as times change.
+
+### What is intentionally not in Stage 3
+
+- **Real routines** -- `NextRoutineCard` is a static placeholder. The full `LightRoutine` model and scheduling logic are Stage 4.
+- **Notifications** -- no `UNUserNotificationCenter` integration yet.
+- **Widgets** -- WidgetKit is Stage 9.
+- **Paywall changes** -- no new Free vs Plus gates introduced. The existing tier model is unchanged.
+- **Live timer** -- the ViewModel does not self-update on a timer. The view must call `refresh()` externally to update countdowns.
+
+---
+
 ## Post-1.0 Future Features
 
 These are not in scope for v1 but are worth keeping in mind to avoid closing off architectural doors.
