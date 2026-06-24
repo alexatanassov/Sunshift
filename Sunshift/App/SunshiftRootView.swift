@@ -28,6 +28,12 @@ private struct MainTabView: View {
 }
 
 #Preview {
+    let sub = SubscriptionService()
+    let store = RoutineStore()
     SunshiftRootView()
         .environment(AppState())
+        .environment(sub)
+        .environment(store)
+        .environment(RoutinesViewModel(store: store, subscriptionService: sub))
+        .environment(LocationViewModel(subscriptionService: sub))
 }

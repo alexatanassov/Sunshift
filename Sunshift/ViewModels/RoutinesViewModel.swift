@@ -54,6 +54,24 @@ final class RoutinesViewModel {
         store.delete(id: id)
     }
 
+    // Updates the first existing routine in place, or adds one if the store is empty.
+    // Used by onboarding so we never duplicate the seeded Sunset Walk routine.
+    func upsertOnboardingRoutine(_ routine: LightRoutine) {
+        guard routines.isEmpty else {
+            var existing = routines[0]
+            existing.title = routine.title
+            existing.templateType = routine.templateType
+            existing.sunEventType = routine.sunEventType
+            existing.offsetMinutes = routine.offsetMinutes
+            existing.isBeforeEvent = routine.isBeforeEvent
+            existing.selectedWeekdays = routine.selectedWeekdays
+            existing.notificationMessage = routine.notificationMessage
+            store.update(existing)
+            return
+        }
+        store.add(routine)
+    }
+
     // MARK: - Private
 
     private func offsetLabel(minutes: Int) -> String {

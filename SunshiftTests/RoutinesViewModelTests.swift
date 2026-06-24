@@ -220,6 +220,36 @@ struct RoutinesViewModelTests {
         #expect(added.notificationMessage == "Good morning. Sunrise is here.")
     }
 
+    // MARK: - Onboarding upsert
+
+    @Test func upsertOnboardingRoutineUpdatesSeededRoutineInPlace() {
+        let (vm, store) = makeViewModelAndStore()
+        #expect(store.routines.count == 1)
+
+        let built = LightRoutine(title: "Custom Walk", sunEventType: .goldenHourStart, offsetMinutes: 10, isBeforeEvent: true)
+        vm.upsertOnboardingRoutine(built)
+
+        #expect(store.routines.count == 1, "Must update, not add a second routine")
+        #expect(store.routines[0].title == "Custom Walk")
+        #expect(store.routines[0].sunEventType == .goldenHourStart)
+        #expect(store.routines[0].offsetMinutes == 10)
+    }
+
+    @Test func upsertOnboardingRoutineAddsWhenStoreIsEmpty() {
+        let defaults = UserDefaults(suiteName: "sunshift.test.upsert.\(UUID().uuidString)")!
+        let emptyData = try! JSONEncoder().encode([LightRoutine]())
+        defaults.set(emptyData, forKey: "sunshift.light_routines")
+        let store = RoutineStore(userDefaults: defaults)
+        let sub = SubscriptionService()
+        let vm = RoutinesViewModel(store: store, subscriptionService: sub)
+
+        #expect(store.routines.isEmpty)
+        let built = LightRoutine(title: "Fresh Start", sunEventType: .sunset)
+        vm.upsertOnboardingRoutine(built)
+        #expect(store.routines.count == 1)
+        #expect(store.routines[0].title == "Fresh Start")
+    }
+
     // MARK: - Delete
 
     @Test func deleteRemovesRoutineFromStore() {
