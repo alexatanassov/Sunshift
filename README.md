@@ -4,9 +4,9 @@ Alarms that move with the sun. Sunshift lets users build routines anchored to so
 
 ---
 
-## Current Stage: Stage 4 - Routine System
+## Current Stage: Stage 5 - Onboarding
 
-The routine system is complete. `LightRoutine` is a fully-specified model with title, solar event anchor, before/after offset, weekday selection, enable/disable flag, and notification message. `RoutineStore` persists routines to `UserDefaults`; the first routine is created during onboarding. `RoutineScheduler` computes the next trigger date by scanning up to 8 days forward and accounting for disabled routines, inactive weekdays, and unavailable solar events. `RoutinesViewModel` enforces the free-tier limit (1 routine) and exposes display helpers for the list. `RoutinesView` shows a full routine list with per-row enable toggles, and `RoutineEditView` handles both create and edit modes with a template picker, timing controls, weekday chips, and a delete action. The Today screen `NextRoutineCard` is wired to real data from `RoutineStore` and `RoutineScheduler`.
+The onboarding flow is complete. `OnboardingView` guides the user through six steps: welcome, template selection, timing customization, location, confirmation, and notification permission request. `RoutineStore` starts empty on a fresh install; onboarding is the sole path that creates the first routine via `RoutinesViewModel.upsertOnboardingRoutine`. Sunset Walk is the default free template; Plus-locked templates are visible but cannot be selected without a subscription. The confirmation step computes the first trigger time using `RoutineScheduler`. `NotificationPermissionService` requests system notification permission via `UNUserNotificationCenter`; no notifications are scheduled yet. After onboarding, `AppState.hasCompletedOnboarding` is written to `UserDefaults` and `SunshiftRootView` routes to `MainTabView` with one active routine on the Today tab.
 
 ---
 
@@ -95,7 +95,7 @@ xcodebuild test \
 ```
 Sunshift/
 ├── App/
-│   ├── SunshiftApp.swift          # @main entry point; injects AppState and SubscriptionService
+│   ├── SunshiftApp.swift          # @main entry point; initializes and injects all services and view models
 │   └── SunshiftRootView.swift     # Onboarding gate -> MainTabView
 ├── Core/
 │   ├── AppConstants.swift         # App name, tagline
@@ -107,7 +107,8 @@ Sunshift/
 │   ├── Debug/
 │   │   └── SolarDebugView.swift         # Dev-only view for inspecting SunSchedule output live
 │   ├── Onboarding/
-│   │   └── OnboardingView.swift         # Shown on first launch; sets hasCompletedOnboarding
+│   │   ├── OnboardingView.swift         # Six-step onboarding flow; creates first routine on completion
+│   │   └── OnboardingViewModel.swift    # Step navigation, template selection, timing state, buildRoutine()
 │   ├── Today/
 │   │   ├── TodayView.swift              # Main Today tab; routes between empty, loading, error, and content states
 │   │   └── TodayTimelineView.swift      # Horizontal day timeline bar with gradient and now-indicator dot
@@ -142,7 +143,8 @@ Sunshift/
 │   ├── DeviceLocationService.swift      # CLLocationManager wrapper; one-shot requestLocation()
 │   ├── LocationGeocodingService.swift   # CLGeocoder reverse geocoding; builds SavedLocation from placemark
 │   ├── LocationStore.swift              # @Observable; persists savedLocations + activeLocationID to UserDefaults
-│   ├── RoutineStore.swift               # @Observable; persists [LightRoutine] to UserDefaults; first routine created by onboarding
+│   ├── NotificationPermissionService.swift  # @Observable; requests UNUserNotificationCenter authorization; no scheduling yet
+│   ├── RoutineStore.swift               # @Observable; persists [LightRoutine] to UserDefaults; starts empty; first routine added by onboarding
 │   ├── RoutineScheduler.swift           # Static; nextTriggerDate scans up to 8 days, respects weekdays and offsets
 │   ├── SunService.swift                 # NOAA-style solar position engine; no network required
 │   ├── SunService+NextRelevantEvent.swift # Cross-midnight next-event fallback
@@ -339,15 +341,31 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 | App entry point | `SunshiftApp` initializes `RoutineStore` and `RoutinesViewModel`; both injected into the environment alongside `SubscriptionService` and `LocationViewModel` |
 | Free vs Plus foundation | Free: 1 routine, sunsetWalk and custom templates, no custom notification messages. Plus: unlimited routines, all templates, custom messages. No real StoreKit purchase flow yet. |
 
+## Implemented in Stage 5
+
+| Area | What's in place |
+|---|---|
+| Onboarding steps | Six-step flow: welcome, template selection, timing customization, location, confirmation, notification permission |
+| `OnboardingViewModel` | `@Observable`; tracks current step, selected template, offset, direction, weekday selection; `buildRoutine()` assembles the `LightRoutine` |
+| Template selection | All `RoutineTemplate` cases shown; Plus templates display a "Plus" badge and an inline locked hint banner when tapped; Sunset Walk is the pre-selected free default |
+| Timing customization | Offset pill row (At / 15 min / 30 min / 1 hr), before/after segmented picker (shown only when offset > 0), weekday chip row |
+| Location step | "Use Current Location" triggers GPS fetch and auto-advances on success; "Skip for now" proceeds immediately; errors shown inline |
+| Confirmation step | Computes next trigger time via `RoutineScheduler.nextTriggerDate` using the resolved location; shows "today", "tomorrow", or a fallback when no trigger is found within 8 days |
+| Notification permission | `NotificationPermissionService` calls `UNUserNotificationCenter.requestAuthorization(options: [.alert, .sound])`; "Not now" also advances without requesting; no notifications are scheduled |
+| `NotificationPermissionService` | New `@Observable` service; tracks `UNAuthorizationStatus`; `refreshStatus()` called on init; injected into the environment from `SunshiftApp` |
+| First routine creation | `RoutinesViewModel.upsertOnboardingRoutine(_:)` adds on a fresh install or updates the first routine in place on re-entry; `RoutineStore` starts with zero routines on a fresh install |
+| `AppState` persistence | `hasCompletedOnboarding` is `UserDefaults`-backed (key: `sunshift.hasCompletedOnboarding`); survives app restarts; set to `true` in `OnboardingView.complete()` |
+| Post-onboarding routing | `SunshiftRootView` routes to `MainTabView` (Today tab); Routines tab shows one active routine |
+
 ---
 
 ## Upcoming Stages
 
 | Stage | Focus |
 |---|---|
-| 5 | Notification Scheduling - `UNUserNotificationCenter` integration, offset-aware triggers, permission request |
-| 6 | Free vs Plus System - feature gates wired to StoreKit 2 real purchases, paywall screen |
-| 7 | Premium Feature Buildout - unlimited routines, multiple locations, advanced offsets |
-| 8 | Widgets + Travel Mode - WidgetKit extension, automatic location updates when traveling |
-| 9 | Polish + App Store Launch - accessibility, localization, App Store assets, review prompts |
+| 6 | Notification Scheduling - `UNUserNotificationCenter` content and trigger scheduling; offset-aware notifications that fire when each routine's computed time arrives |
+| 7 | Free vs Plus System - feature gates wired to StoreKit 2 real purchases, paywall screen |
+| 8 | Premium Feature Buildout - unlimited routines, multiple locations, advanced offsets |
+| 9 | Widgets + Travel Mode - WidgetKit extension, automatic location updates when traveling |
+| 10 | Polish + App Store Launch - accessibility, localization, App Store assets, review prompts |
 

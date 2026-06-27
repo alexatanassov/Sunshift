@@ -444,12 +444,100 @@ The model stores any offset value regardless of tier. UI restrictions are applie
 
 ### What Is Intentionally Not Included in Stage 4
 
-- **Notification scheduling:** `UNUserNotificationCenter` is not called. `nextTriggerDate` computes the correct time but does not create a system notification. This is Stage 5.
-- **Notification permission request:** No `UNUserNotificationCenter.requestAuthorization` call. The notification message field is present in the edit UI but has no live effect.
+- **Notification scheduling:** `UNUserNotificationCenter` is not called. `nextTriggerDate` computes the correct time but does not create a system notification. This is Stage 6.
+- **Notification permission request:** Added in Stage 5 via `NotificationPermissionService`. The notification message field in the edit UI has no live effect until notification scheduling is implemented in Stage 6.
 - **Widgets:** WidgetKit is post-Stage 4. `RoutineStore` and `RoutineScheduler` are designed to be accessible from a widget extension but the extension does not exist yet.
 - **Full paywall:** `SubscriptionService.isPlusUser` is a manually toggled Bool. StoreKit 2 purchase and restore flows are stubbed but not implemented.
 - **Advanced routine templates beyond the 4 seeded templates:** The template enum can be extended, but no additional templates are defined beyond sunsetWalk, morningLight, windDown, goldenHourShoot, and custom.
 - **Per-routine location overrides:** `LightRoutine.locationId` is stored but not used. All routines evaluate against the active location.
+
+---
+
+## Stage 5: Onboarding
+
+Stage 5 implements the multi-step onboarding flow that creates the user's first routine before they reach the main app. Onboarding is now the sole entry point for first-routine creation on a fresh install.
+
+### Flow Overview
+
+`OnboardingViewModel` defines six steps in order:
+
+1. **Welcome** -- App name, tagline, and a "Get Started" button.
+2. **Template Pick** -- All `RoutineTemplate` cases are shown. Free templates (Sunset Walk, Custom) are selectable by all users. Plus templates show a "Plus" badge; tapping one shows an inline `LockedTemplateBanner` rather than selecting it.
+3. **Customize** -- Offset picker (At / 15 min / 30 min / 1 hr), a before/after segmented picker (shown only when offset > 0), and a weekday chip row. Pre-filled from the selected template's defaults.
+4. **Location** -- "Use Current Location" triggers `LocationViewModel.useCurrentLocation()` and auto-advances on success. "Skip for now" proceeds immediately using the San Diego fallback. GPS or permission errors are shown inline.
+5. **Confirm** -- Shows the routine name and the next computed trigger time from `RoutineScheduler.nextTriggerDate`, plus a context note that the time shifts automatically with the seasons.
+6. **Notifications** -- "Allow Notifications" calls `NotificationPermissionService.requestPermission()` then completes onboarding. "Not now" also completes onboarding. Both paths proceed regardless of the permission outcome.
+
+Step transitions use a slide-and-fade animation: forward slides from trailing, back slides from leading.
+
+### AppState and Onboarding Gate
+
+`AppState.hasCompletedOnboarding` is a `UserDefaults`-backed computed property (key: `sunshift.hasCompletedOnboarding`). `SunshiftRootView` reads it to decide whether to show `OnboardingView` or `MainTabView`. Setting it to `true` in `OnboardingView.complete()` immediately routes the user into the main app. The flag persists across app restarts because it is backed by `UserDefaults`.
+
+### First Routine Creation
+
+`OnboardingView.complete()` calls `routinesViewModel.upsertOnboardingRoutine(viewModel.buildRoutine())` before setting `hasCompletedOnboarding`. `buildRoutine()` constructs a `LightRoutine` from the selected template, offset, direction, and weekday selection.
+
+`RoutinesViewModel.upsertOnboardingRoutine(_:)` handles two cases:
+- **Fresh install (empty store):** calls `store.add(_:)`.
+- **Re-entry (routines already exist):** updates the first routine in place via `store.update(_:)` without appending a duplicate.
+
+### RoutineStore Starting State
+
+`RoutineStore.load()` is a no-op when the `UserDefaults` key is absent. A fresh install starts with zero routines. After onboarding completes, exactly one routine exists. The Routines tab reflects this immediately because `RoutinesViewModel.routines` is a direct projection of `RoutineStore.routines`.
+
+### Template Selection and Plus Hints
+
+- `RoutineTemplate.sunsetWalk` is the initial selection and the recommended free default.
+- Selecting a free template applies its defaults to `offsetMinutes` and `isBeforeEvent` on `OnboardingViewModel`.
+- Tapping a Plus-locked template sets `OnboardingViewModel.lockedTemplateHint` instead of selecting the template. The banner is dismissed via `dismissLockedHint()`.
+- `TemplateCard.previewText` shows a short description (e.g., "30 min before Sunset") so users can compare templates without navigating away.
+
+### Timing Customization
+
+| Control | Behavior |
+|---|---|
+| Offset pill row | Presets: At (0 min), 15 min, 30 min, 1 hr. Tapping a pill sets `viewModel.offsetMinutes`. |
+| Before/After picker | Segmented control bound to `viewModel.isBeforeEvent`; only shown when `offsetMinutes > 0`. |
+| Weekday chip row | Seven circular chips (S M T W T F S); reuses `WeekdayChipRow` from `RoutineEditView`; bound to `viewModel.selectedWeekdays`. |
+
+### Location Step
+
+`LocationStep` wraps `LocationViewModel`. "Use Current Location" triggers `locationViewModel.useCurrentLocation()` asynchronously. Auto-advance is driven by `.onChange(of: locationViewModel.isLoading)`: when loading drops to `false` with no error, `onContinue()` fires. If permission is denied or GPS fails, the error is shown inline and the step stays open.
+
+"Skip for now" calls `onContinue()` directly. The San Diego fallback is used for solar calculations until the user configures a real location in the Locations tab.
+
+### Confirmation Step
+
+`ConfirmStep` calls `RoutineScheduler.nextTriggerDate` at render time using `viewModel.buildRoutine()` and `locationViewModel.resolvedLocation`. The result drives two lines of copy:
+- **Primary:** e.g., "Your Sunset Walk is set for 7:24 PM today." Shows "tomorrow" or "soon" for later dates, and a generic fallback when the scheduler returns nil.
+- **Secondary:** A context note keyed to the anchor event type (e.g., "It will move automatically as sunset changes.").
+
+No routine is written to `RoutineStore` until `complete()` fires at the end of the notifications step.
+
+### NotificationPermissionService
+
+`NotificationPermissionService` is a new `@Observable` service initialized and injected by `SunshiftApp`. It wraps `UNUserNotificationCenter`:
+
+- `refreshStatus()` reads `UNAuthorizationStatus` on init and can be called on demand.
+- `requestPermission()` calls `requestAuthorization(options: [.alert, .sound])` and updates `authorizationStatus` to `.authorized` or `.denied`.
+
+No notification content or triggers are scheduled. Scheduling is Stage 6.
+
+### Post-Onboarding State
+
+After `hasCompletedOnboarding` is set:
+- `SunshiftRootView` transitions to `MainTabView` with the Today tab selected.
+- `NextRoutineCard` on the Today tab shows the routine created during onboarding.
+- The Routines tab lists one enabled routine.
+
+### What Is Intentionally Not Included in Stage 5
+
+- **Notification scheduling:** `UNUserNotificationCenter` content and trigger scheduling are not implemented. Permission is requested, but no notifications will fire. This is Stage 6.
+- **AlarmKit integration:** Not in scope for v1.
+- **Widgets:** WidgetKit is post-Stage 5.
+- **Full paywall purchase flow:** `SubscriptionService.isPlusUser` remains a manually toggled Bool. No StoreKit 2 purchase or restore flow.
+- **Advanced onboarding analytics:** No event tracking or funnel logging.
 
 ---
 
