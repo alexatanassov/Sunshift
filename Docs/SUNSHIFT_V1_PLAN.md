@@ -444,8 +444,8 @@ The model stores any offset value regardless of tier. UI restrictions are applie
 
 ### What Is Intentionally Not Included in Stage 4
 
-- **Notification scheduling:** `UNUserNotificationCenter` is not called. `nextTriggerDate` computes the correct time but does not create a system notification. This is Stage 6.
-- **Notification permission request:** Added in Stage 5 via `NotificationPermissionService`. The notification message field in the edit UI has no live effect until notification scheduling is implemented in Stage 6.
+- **Notification scheduling:** `UNUserNotificationCenter` is not called in Stage 4. `nextTriggerDate` computes the correct time but does not create a system notification. Implemented in Stage 6.
+- **Notification permission request:** Added in Stage 5 via `NotificationPermissionService`. The notification message field in the edit UI has no live effect until Stage 6. Implemented in Stage 6.
 - **Widgets:** WidgetKit is post-Stage 4. `RoutineStore` and `RoutineScheduler` are designed to be accessible from a widget extension but the extension does not exist yet.
 - **Full paywall:** `SubscriptionService.isPlusUser` is a manually toggled Bool. StoreKit 2 purchase and restore flows are stubbed but not implemented.
 - **Advanced routine templates beyond the 4 seeded templates:** The template enum can be extended, but no additional templates are defined beyond sunsetWalk, morningLight, windDown, goldenHourShoot, and custom.
@@ -522,7 +522,7 @@ No routine is written to `RoutineStore` until `complete()` fires at the end of t
 - `refreshStatus()` reads `UNAuthorizationStatus` on init and can be called on demand.
 - `requestPermission()` calls `requestAuthorization(options: [.alert, .sound])` and updates `authorizationStatus` to `.authorized` or `.denied`.
 
-No notification content or triggers are scheduled. Scheduling is Stage 6.
+No notification content or triggers are scheduled in Stage 5. Content and trigger scheduling are implemented in Stage 6.
 
 ### Post-Onboarding State
 
@@ -533,11 +533,109 @@ After `hasCompletedOnboarding` is set:
 
 ### What Is Intentionally Not Included in Stage 5
 
-- **Notification scheduling:** `UNUserNotificationCenter` content and trigger scheduling are not implemented. Permission is requested, but no notifications will fire. This is Stage 6.
+- **Notification scheduling:** `UNUserNotificationCenter` content and trigger scheduling are not in Stage 5. Permission is requested in onboarding, but no notifications fire until Stage 6. Implemented in Stage 6.
 - **AlarmKit integration:** Not in scope for v1.
 - **Widgets:** WidgetKit is post-Stage 5.
 - **Full paywall purchase flow:** `SubscriptionService.isPlusUser` remains a manually toggled Bool. No StoreKit 2 purchase or restore flow.
 - **Advanced onboarding analytics:** No event tracking or funnel logging.
+
+---
+
+## Stage 6: Notification Scheduling
+
+Stage 6 implements local notification delivery for light-based routines. `RoutineNotificationScheduler` schedules a rolling window of one-shot notifications per enabled routine, each timed to the routine's computed solar trigger at the active location.
+
+### Why one-shot triggers instead of repeating
+
+Solar event times shift by seconds to minutes each day as the sun's position changes through the season. A repeating `UNCalendarNotificationTrigger` fires at a fixed time and cannot represent this daily drift. Stage 6 schedules a separate `UNCalendarNotificationTrigger` per upcoming occurrence. A rolling window of 7 occurrences is scheduled per routine on every reschedule call.
+
+### RoutineNotificationScheduler
+
+`RoutineNotificationScheduler` is `@MainActor` and `final`. Its two dependencies:
+
+- `NotificationSchedulingCenter` -- a protocol that abstracts the three `UNUserNotificationCenter` calls used for scheduling (`add`, `removePendingNotificationRequests`, `pendingNotificationRequests`). `UNUserNotificationCenter` conforms via a retroactive extension. Tests inject a `MockNotificationCenter` in-memory stand-in.
+- `SunService` -- computes `SunSchedule` for each candidate day.
+
+**Rolling window search:** `nextTriggerDates(for:location:after:)` searches up to 49 days (`maxOccurrences * 7 = 7 * 7`) to collect 7 valid trigger dates. The multiplier guarantees 7 occurrences even for a once-weekly routine.
+
+**Per-day logic (in order):**
+
+1. Build a Gregorian `Calendar` in the location's IANA timezone.
+2. For each day offset from `now`:
+   - Check `selectedWeekdays` -- skip non-matching days.
+   - Call `SunService.sunSchedule(for:)` -- skip days that throw.
+   - Resolve `SunSchedule.event(for: routine.sunEventType)` -- skip days where the event is `nil` (polar conditions).
+   - Compute trigger: `eventDate - offsetSeconds` (before) or `eventDate + offsetSeconds` (after).
+   - Append the trigger if it is strictly after `now`.
+3. Stop when 7 results are collected.
+
+**Permission gating:** `scheduleOccurrences` is a no-op unless `authStatus` is `.authorized` or `.provisional`.
+
+**Enabled gating:** `scheduleOccurrences` returns immediately when `routine.isEnabled` is `false`. The cancel step in `schedule(_:location:authStatus:now:)` always runs first, so disabling a routine removes its pending requests before the enabled check fires.
+
+**Stale notification cleanup:** `rescheduleAll` calls `cancelAll` before iterating the routine array. Routines absent from the array -- deleted or not passed in -- are cleared by `cancelAll` and never rescheduled.
+
+### Stable notification identifiers
+
+Format: `sunshift.routine.<routineID>.<occurrenceIndex>`
+
+The prefix `sunshift.routine.<routineID>.` uniquely identifies all requests for one routine. `cancel(routineID:)` reads pending requests, filters by prefix, and removes them without needing to know occurrence indices in advance. `cancelAll` matches any identifier starting with `sunshift.routine.`.
+
+### Notification content
+
+| Field | Source |
+|---|---|
+| `title` | `routine.title` |
+| `body` | `routine.notificationMessage` when non-empty; `"It's time for your routine."` otherwise |
+| `sound` | `.default` |
+
+### Calendar trigger timezone
+
+`makeRequest(for:triggerDate:location:index:)` extracts `.year`, `.month`, `.day`, `.hour`, `.minute` components from the trigger date using a `Calendar` set to the location's IANA timezone, then sets `components.timeZone` to the same timezone. This ensures `UNCalendarNotificationTrigger` interprets the components as local time at the routine's location, not the device's current timezone.
+
+### SunshiftApp integration
+
+`RoutineNotificationScheduler` is a stored `let` constant on `SunshiftApp` (not injected into the environment; no other type needs it). `scheduleAll()` wraps `rescheduleAll(_:location:authStatus:)` and is called from four sites:
+
+| Site | Trigger |
+|---|---|
+| `.task` | App launch |
+| `.onChange(of: routineStore.routines)` | Any routine created, updated, enabled, disabled, or deleted |
+| `.onChange(of: locationViewModel.resolvedLocation.id)` | Active location changes |
+| `.onChange(of: notificationPermissionService.authorizationStatus.rawValue)` | Permission granted or revoked |
+
+### Test coverage
+
+`RoutineNotificationSchedulerTests.swift` tests run `@MainActor` to match the scheduler's isolation. `MockNotificationCenter` is an in-memory `NotificationSchedulingCenter` that records added requests and processes removals synchronously.
+
+| Test | What it verifies |
+|---|---|
+| `authorizedEnabledRoutineSchedulesSevenOccurrences` | Rolling window produces exactly 7 requests for an everyday routine |
+| `deniedPermissionCancelsExistingAndSchedulesNone` | Rescheduling with `.denied` cancels prior requests and adds none |
+| `notDeterminedPermissionSchedulesNone` | `.notDetermined` results in no scheduled requests |
+| `provisionalPermissionSchedulesSeven` | `.provisional` is treated the same as `.authorized` |
+| `disabledRoutineCancelsExistingAndSchedulesNone` | Disabling a routine (same UUID) clears its existing requests |
+| `cancelRemovesAllOccurrencesWithRoutinePrefix` | `cancel(routineID:)` removes all requests with the matching prefix |
+| `rescheduleAllSchedulesEnabledSkipsDisabled` | `rescheduleAll` with a mixed array schedules only the enabled routine |
+| `notificationIDsAreStableAndRoutineSpecific` | Same input always produces the same identifier; different UUIDs produce different identifiers |
+| `emptyMessageUsesDefaultBody` | Fallback body is used when `notificationMessage` is empty |
+| `customMessageIsUsed` | Non-empty `notificationMessage` is used verbatim as body |
+| `titleMatchesRoutineTitle` | `content.title` equals `routine.title` |
+| `triggerIsCalendarTrigger` | Trigger type is `UNCalendarNotificationTrigger` (not interval or location) |
+| `triggerComponentsUseLocationTimezone` | Date components carry the location's IANA timezone; hour is in local time |
+| `rescheduleAllClearsStaleNotificationsForDeletedRoutine` | After a routine is removed from the array, `rescheduleAll` leaves none of its requests behind |
+| `cancelAllRemovesAllSunshiftNotifications` | `cancelAll` clears all `sunshift.routine.*` requests across all routines |
+| `noEventInSearchWindowSchedulesNone` | Polar-day location where sunset never occurs during the 49-day window produces zero requests |
+
+### What is intentionally not included in Stage 6
+
+- **AlarmKit integration:** Not in scope for v1.
+- **Background rescheduling after delivery:** When a notification fires, the app does not automatically schedule a replacement. The next `rescheduleAll` call (on the next foreground launch or change event) replenishes the window. Background rescheduling via `UNUserNotificationCenterDelegate` or `BackgroundTasks` is post-Stage 6.
+- **`UNUserNotificationCenterDelegate` delivery handling:** No response handling, foreground presentation options, or action buttons are implemented.
+- **Widgets:** WidgetKit is post-Stage 6.
+- **StoreKit paywall purchase flow:** `SubscriptionService.isPlusUser` remains manually toggled.
+- **Notification status screen:** No in-app UI showing pending notification times or the upcoming routine delivery list.
+- **Advanced analytics:** No event tracking or delivery logging.
 
 ---
 

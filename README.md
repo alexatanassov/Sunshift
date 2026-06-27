@@ -4,9 +4,9 @@ Alarms that move with the sun. Sunshift lets users build routines anchored to so
 
 ---
 
-## Current Stage: Stage 5 - Onboarding
+## Current Stage: Stage 6 - Notification Scheduling
 
-The onboarding flow is complete. `OnboardingView` guides the user through six steps: welcome, template selection, timing customization, location, confirmation, and notification permission request. `RoutineStore` starts empty on a fresh install; onboarding is the sole path that creates the first routine via `RoutinesViewModel.upsertOnboardingRoutine`. Sunset Walk is the default free template; Plus-locked templates are visible but cannot be selected without a subscription. The confirmation step computes the first trigger time using `RoutineScheduler`. `NotificationPermissionService` requests system notification permission via `UNUserNotificationCenter`; no notifications are scheduled yet. After onboarding, `AppState.hasCompletedOnboarding` is written to `UserDefaults` and `SunshiftRootView` routes to `MainTabView` with one active routine on the Today tab.
+Local notification scheduling is implemented. `RoutineNotificationScheduler` schedules a rolling window of up to 7 one-shot `UNCalendarNotificationTrigger` requests per enabled routine, derived from the routine's solar trigger times at the active location. `SunshiftApp` calls `rescheduleAll` on launch and again whenever routines, the active location, or notification permission status changes. Disabled routines produce no notifications; their existing requests are cancelled. Deleted routines are cleared because `rescheduleAll` issues a full `cancelAll` before rescheduling only the routines currently in the store. Notification identifiers are stable, keyed to routine ID and occurrence index. Content uses the routine title and `notificationMessage`, falling back to "It's time for your routine." when the message is empty. Calendar trigger components are expressed in the location's IANA timezone.
 
 ---
 
@@ -143,7 +143,8 @@ Sunshift/
 │   ├── DeviceLocationService.swift      # CLLocationManager wrapper; one-shot requestLocation()
 │   ├── LocationGeocodingService.swift   # CLGeocoder reverse geocoding; builds SavedLocation from placemark
 │   ├── LocationStore.swift              # @Observable; persists savedLocations + activeLocationID to UserDefaults
-│   ├── NotificationPermissionService.swift  # @Observable; requests UNUserNotificationCenter authorization; no scheduling yet
+│   ├── NotificationPermissionService.swift  # @Observable; tracks UNAuthorizationStatus; requests authorization via UNUserNotificationCenter
+│   ├── RoutineNotificationScheduler.swift   # @MainActor; schedules rolling one-shot UNCalendarNotificationTrigger requests per routine; cancels stale notifications
 │   ├── RoutineStore.swift               # @Observable; persists [LightRoutine] to UserDefaults; starts empty; first routine added by onboarding
 │   ├── RoutineScheduler.swift           # Static; nextTriggerDate scans up to 8 days, respects weekdays and offsets
 │   ├── SunService.swift                 # NOAA-style solar position engine; no network required
@@ -162,8 +163,8 @@ Sunshift/
 Docs/
 └── SUNSHIFT_V1_PLAN.md            # Full v1 product plan and stage breakdown
 
-SunshiftTests/
-└── SunshiftTests.swift            # Unit tests for SunService and SunSchedule
+SunshiftTests/                                   # Unit test suite covering SunService, routines,
+                                                 # onboarding, locations, and notification scheduling
 ```
 
 ---
@@ -359,11 +360,27 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 
 ---
 
+## Implemented in Stage 6
+
+| Area | What's in place |
+|---|---|
+| `RoutineNotificationScheduler` | `@MainActor` final class; wraps `UNUserNotificationCenter` via `NotificationSchedulingCenter` protocol for testability; `UNUserNotificationCenter` conforms via a retroactive extension |
+| Rolling window scheduling | Up to 7 one-shot `UNCalendarNotificationTrigger` requests per routine; searches up to 49 days to fill 7 occurrences for once-weekly routines |
+| Permission gating | No requests added when `authStatus` is `.denied` or `.notDetermined`; `.authorized` and `.provisional` proceed |
+| Enabled/disabled gate | Disabled routines: existing requests cancelled, no new ones added |
+| Stale notification cleanup | `rescheduleAll` calls `cancelAll` first; routines absent from the array (deleted or not passed in) are not rescheduled |
+| Stable identifiers | Format: `sunshift.routine.<routineID>.<occurrenceIndex>`; prefix `sunshift.routine.<routineID>.` allows targeted cancellation per routine |
+| Notification content | Title from `routine.title`; body from `routine.notificationMessage` or fallback `"It's time for your routine."`; sound `.default` |
+| Timezone-correct triggers | `UNCalendarNotificationTrigger` date components derived in the location's IANA timezone; `components.timeZone` explicitly set |
+| `SunshiftApp` integration | `scheduleAll()` called on `.task` (launch), `.onChange(of: routineStore.routines)`, `.onChange(of: locationViewModel.resolvedLocation.id)`, `.onChange(of: notificationPermissionService.authorizationStatus.rawValue)` |
+| Unit tests | 16 tests in `RoutineNotificationSchedulerTests.swift`: permission gating (authorized/denied/notDetermined/provisional), disabled routine cancellation, rolling window count, stale cleanup for deleted routines, identifier stability, content (title/custom body/default body), calendar trigger type, timezone components in local time, polar no-event case |
+
+---
+
 ## Upcoming Stages
 
 | Stage | Focus |
 |---|---|
-| 6 | Notification Scheduling - `UNUserNotificationCenter` content and trigger scheduling; offset-aware notifications that fire when each routine's computed time arrives |
 | 7 | Free vs Plus System - feature gates wired to StoreKit 2 real purchases, paywall screen |
 | 8 | Premium Feature Buildout - unlimited routines, multiple locations, advanced offsets |
 | 9 | Widgets + Travel Mode - WidgetKit extension, automatic location updates when traveling |
