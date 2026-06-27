@@ -8,6 +8,7 @@ struct SunshiftApp: App {
     @State private var routineStore: RoutineStore
     @State private var routinesViewModel: RoutinesViewModel
     @State private var notificationPermissionService = NotificationPermissionService()
+    private let notificationScheduler = RoutineNotificationScheduler()
 
     init() {
         let sub = SubscriptionService()
@@ -28,6 +29,24 @@ struct SunshiftApp: App {
                 .environment(routinesViewModel)
                 .environment(notificationPermissionService)
                 .onAppear { locationViewModel.loadInitialLocation() }
+                .task { await scheduleAll() }
+                .onChange(of: routineStore.routines) {
+                    Task { await scheduleAll() }
+                }
+                .onChange(of: locationViewModel.resolvedLocation.id) {
+                    Task { await scheduleAll() }
+                }
+                .onChange(of: notificationPermissionService.authorizationStatus.rawValue) {
+                    Task { await scheduleAll() }
+                }
         }
+    }
+
+    private func scheduleAll() async {
+        await notificationScheduler.rescheduleAll(
+            routineStore.routines,
+            location: locationViewModel.resolvedLocation,
+            authStatus: notificationPermissionService.authorizationStatus
+        )
     }
 }
