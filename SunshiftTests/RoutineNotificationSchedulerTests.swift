@@ -307,14 +307,55 @@ struct RoutineNotificationSchedulerTests {
         #expect(hour >= 18)  // sunset in SF in late June is after 6 PM local time
     }
 
+    // MARK: - Deleted routine
+
+    @Test func rescheduleAllClearsStaleNotificationsForDeletedRoutine() async throws {
+        let now = try makeDate(year: 2026, month: 6, day: 23, hour: 12)
+        let mock = MockNotificationCenter()
+        let scheduler = RoutineNotificationScheduler(center: mock)
+        let location = makeLocation()
+
+        let routineA = makeRoutine(title: "Morning Light")
+        let routineB = makeRoutine(title: "Sunset Walk")
+
+        await scheduler.rescheduleAll([routineA, routineB], location: location, authStatus: .authorized, now: now)
+        #expect(mock.pending.count == 14)
+
+        // Simulate deletion of routineB.
+        await scheduler.rescheduleAll([routineA], location: location, authStatus: .authorized, now: now)
+
+        #expect(mock.pending.count == 7)
+        let prefixA = RoutineNotificationScheduler.notificationIDPrefix(for: routineA.id)
+        #expect(mock.pending.allSatisfy { $0.identifier.hasPrefix(prefixA) })
+    }
+
+    // MARK: - cancelAll
+
+    @Test func cancelAllRemovesAllSunshiftNotifications() async throws {
+        let now = try makeDate(year: 2026, month: 6, day: 23, hour: 12)
+        let mock = MockNotificationCenter()
+        let scheduler = RoutineNotificationScheduler(center: mock)
+        let location = makeLocation()
+
+        let routineA = makeRoutine(title: "Morning")
+        let routineB = makeRoutine(title: "Evening")
+        await scheduler.rescheduleAll([routineA, routineB], location: location, authStatus: .authorized, now: now)
+        #expect(mock.pending.count == 14)
+
+        await scheduler.cancelAll()
+
+        #expect(mock.pending.isEmpty)
+    }
+
     // MARK: - Unavailable event
 
     @Test func noEventInSearchWindowSchedulesNone() async throws {
-        // Tromsø midsummer: polar day means no sunset for the entire 30-day search window.
+        // Longyearbyen (Svalbard, 78.22°N) at midsummer: polar day extends ~63 days past
+        // June 21, covering the entire 49-day search window (maxOccurrences × 7 days).
         let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "Europe/Oslo")
         let mock = MockNotificationCenter()
         let scheduler = RoutineNotificationScheduler(center: mock)
-        let location = makeLocation(lat: 69.6492, lon: 18.9553, tzID: "Europe/Oslo")
+        let location = makeLocation(lat: 78.2232, lon: 15.6469, tzID: "Europe/Oslo")
 
         await scheduler.schedule(
             makeRoutine(sunEventType: .sunset, selectedWeekdays: .everyday),
