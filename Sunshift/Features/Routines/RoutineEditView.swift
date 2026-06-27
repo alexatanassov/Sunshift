@@ -21,6 +21,7 @@ struct RoutineEditView: View {
     @State private var selectedWeekdays: WeekdaySelection
     @State private var isEnabled: Bool
     @State private var notificationMessage: String
+    @State private var lockedTemplateHint: RoutineTemplate? = nil
 
     private var isCreating: Bool {
         if case .create = mode { return true }
@@ -76,6 +77,7 @@ struct RoutineEditView: View {
             Form {
                 nameSection
                 if isCreating { templateSection }
+                if isCreating { lockedTemplateHintSection }
                 timingSection
                 scheduleSection
                 notificationSection
@@ -95,6 +97,9 @@ struct RoutineEditView: View {
                         .fontWeight(.semibold)
                         .disabled(isSaveDisabled)
                 }
+            }
+            .onAppear {
+                clampOffsetIfNeeded()
             }
         }
     }
@@ -149,8 +154,40 @@ struct RoutineEditView: View {
         }
     }
 
+    @ViewBuilder
+    private var lockedTemplateHintSection: some View {
+        if let hint = lockedTemplateHint {
+            Section {
+                HStack(spacing: SunshiftSpacing.sm) {
+                    Image(systemName: "lock.fill")
+                        .font(.caption2)
+                        .foregroundStyle(SunshiftColors.duskPurple)
+                    Text("\(hint.displayName) is part of Sunshift Plus.")
+                        .font(SunshiftTypography.caption())
+                        .foregroundStyle(SunshiftColors.duskPurple)
+                    Spacer()
+                    Button {
+                        lockedTemplateHint = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2)
+                            .foregroundStyle(SunshiftColors.secondaryText)
+                    }
+                }
+            }
+        }
+    }
+
+    private var freeOffsetPresets: [ReminderOffset] {
+        [.atEvent, .preset(minutes: 15), .preset(minutes: 30)]
+    }
+
+    private var availableOffsets: [ReminderOffset] {
+        subscriptionService.canUseAdvancedOffsets ? ReminderOffset.presets : freeOffsetPresets
+    }
+
     private var timingSection: some View {
-        Section("Timing") {
+        Section {
             Picker("Event", selection: $sunEventType) {
                 ForEach(SunEventType.routineTriggerCases) { event in
                     Text(event.displayName).tag(event)
@@ -158,7 +195,7 @@ struct RoutineEditView: View {
             }
 
             Picker("Offset", selection: $offsetMinutes) {
-                ForEach(ReminderOffset.presets, id: \.offsetMinutes) { offset in
+                ForEach(availableOffsets, id: \.offsetMinutes) { offset in
                     Text(offsetPickerLabel(offset)).tag(offset.offsetMinutes)
                 }
             }
@@ -169,6 +206,13 @@ struct RoutineEditView: View {
                     Text("After").tag(false)
                 }
                 .pickerStyle(.segmented)
+            }
+        } header: {
+            Text("Timing")
+        } footer: {
+            if !subscriptionService.canUseAdvancedOffsets {
+                Text("More timing options with Sunshift Plus.")
+                    .foregroundStyle(SunshiftColors.duskPurple.opacity(0.8))
             }
         }
     }
@@ -190,6 +234,7 @@ struct RoutineEditView: View {
             TextField("Notification message", text: $notificationMessage, axis: .vertical)
                 .font(SunshiftTypography.body())
                 .lineLimit(3, reservesSpace: false)
+                .disabled(!subscriptionService.canUseCustomNotificationMessages)
         } header: {
             Text("Message")
         } footer: {
@@ -224,6 +269,11 @@ struct RoutineEditView: View {
     // MARK: - Actions
 
     private func applyTemplate(_ template: RoutineTemplate) {
+        guard subscriptionService.canUseTemplate(template) else {
+            lockedTemplateHint = template
+            return
+        }
+        lockedTemplateHint = nil
         selectedTemplate = template
         sunEventType = template.defaultSunEventType
         offsetMinutes = template.defaultOffsetMinutes
@@ -267,6 +317,14 @@ struct RoutineEditView: View {
     }
 
     // MARK: - Helpers
+
+    private func clampOffsetIfNeeded() {
+        guard !subscriptionService.canUseAdvancedOffsets else { return }
+        let freeMinutes = Set(freeOffsetPresets.map(\.offsetMinutes))
+        if !freeMinutes.contains(offsetMinutes) {
+            offsetMinutes = 30
+        }
+    }
 
     private func offsetPickerLabel(_ offset: ReminderOffset) -> String {
         switch offset {

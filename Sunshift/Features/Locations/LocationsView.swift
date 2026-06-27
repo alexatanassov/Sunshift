@@ -287,6 +287,8 @@ private struct LocationErrorBanner: View {
 
 private struct LocationSavedSection: View {
     @Environment(LocationViewModel.self) private var vm
+    @Environment(SubscriptionService.self) private var subscriptionService
+    @State private var showingPlus = false
 
     private var manualLocations: [SavedLocation] {
         vm.savedLocations.filter { !$0.isCurrentLocation }
@@ -308,8 +310,12 @@ private struct LocationSavedSection: View {
             }
 
             if !vm.canAddManualLocation {
-                LocationPlusUpsell()
+                LocationPlusUpsell { showingPlus = true }
             }
+        }
+        .sheet(isPresented: $showingPlus) {
+            PlusView()
+                .environment(subscriptionService)
         }
     }
 }
@@ -386,18 +392,23 @@ private struct LocationSavedRow: View {
 }
 
 private struct LocationPlusUpsell: View {
+    let onTap: () -> Void
+
     var body: some View {
-        HStack(spacing: SunshiftSpacing.sm) {
-            Image(systemName: "sparkles")
-                .foregroundStyle(SunshiftColors.duskPurple)
-            Text("Multiple saved locations will be part of Sunshift Plus.")
-                .font(SunshiftTypography.body())
-                .foregroundStyle(SunshiftColors.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
+        Button(action: onTap) {
+            HStack(spacing: SunshiftSpacing.sm) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(SunshiftColors.duskPurple)
+                Text("Multiple saved locations will be part of Sunshift Plus.")
+                    .font(SunshiftTypography.body())
+                    .foregroundStyle(SunshiftColors.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(SunshiftSpacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(SunshiftColors.duskPurple.opacity(0.08), in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
         }
-        .padding(SunshiftSpacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SunshiftColors.duskPurple.opacity(0.08), in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
+        .buttonStyle(.plain)
     }
 }
 
@@ -408,4 +419,5 @@ private struct LocationPlusUpsell: View {
     let vm = LocationViewModel(subscriptionService: sub)
     return LocationsView()
         .environment(vm)
+        .environment(sub)
 }

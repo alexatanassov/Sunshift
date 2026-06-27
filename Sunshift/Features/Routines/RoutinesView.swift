@@ -2,8 +2,10 @@ import SwiftUI
 
 struct RoutinesView: View {
     @Environment(RoutinesViewModel.self) private var viewModel
+    @Environment(SubscriptionService.self) private var subscriptionService
     @State private var showingCreate = false
     @State private var editingRoutine: LightRoutine?
+    @State private var showingPlus = false
 
     var body: some View {
         NavigationStack {
@@ -64,6 +66,10 @@ struct RoutinesView: View {
                     }
                 )
             }
+            .sheet(isPresented: $showingPlus) {
+                PlusView()
+                    .environment(subscriptionService)
+            }
         }
         .background(SunshiftColors.softBackground)
     }
@@ -105,26 +111,31 @@ struct RoutinesView: View {
     }
 
     private var freeLimitHint: some View {
-        HStack(spacing: SunshiftSpacing.sm) {
-            Image(systemName: "sparkles")
-                .font(.body)
-                .foregroundStyle(SunshiftColors.duskPurple)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Want unlimited routines?")
-                    .font(SunshiftTypography.caption())
-                    .fontWeight(.semibold)
-                    .foregroundStyle(SunshiftColors.primaryText)
-                Text("Sunshift Plus removes the limit.")
-                    .font(SunshiftTypography.caption())
-                    .foregroundStyle(SunshiftColors.secondaryText)
+        Button {
+            showingPlus = true
+        } label: {
+            HStack(spacing: SunshiftSpacing.sm) {
+                Image(systemName: "sparkles")
+                    .font(.body)
+                    .foregroundStyle(SunshiftColors.duskPurple)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Want unlimited routines?")
+                        .font(SunshiftTypography.caption())
+                        .fontWeight(.semibold)
+                        .foregroundStyle(SunshiftColors.primaryText)
+                    Text("Sunshift Plus removes the limit.")
+                        .font(SunshiftTypography.caption())
+                        .foregroundStyle(SunshiftColors.secondaryText)
+                }
+                Spacer()
             }
-            Spacer()
+            .padding(SunshiftSpacing.md)
+            .background(
+                SunshiftColors.duskPurple.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium)
+            )
         }
-        .padding(SunshiftSpacing.md)
-        .background(
-            SunshiftColors.duskPurple.opacity(0.08),
-            in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium)
-        )
+        .buttonStyle(.plain)
     }
 }
 
