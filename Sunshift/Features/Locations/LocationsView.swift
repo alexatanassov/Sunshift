@@ -399,7 +399,7 @@ private struct LocationPlusUpsell: View {
             HStack(spacing: SunshiftSpacing.sm) {
                 Image(systemName: "sparkles")
                     .foregroundStyle(SunshiftColors.duskPurple)
-                Text("Multiple saved locations will be part of Sunshift Plus.")
+                Text("Save more places with Sunshift Plus.")
                     .font(SunshiftTypography.body())
                     .foregroundStyle(SunshiftColors.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
