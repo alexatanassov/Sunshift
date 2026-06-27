@@ -2,8 +2,11 @@ import Foundation
 
 @Observable
 final class AppState {
-    var hasCompletedOnboarding: Bool {
-        get { UserDefaults.standard.bool(forKey: "sunshift.hasCompletedOnboarding") }
-        set { UserDefaults.standard.set(newValue, forKey: "sunshift.hasCompletedOnboarding") }
+    // Stored so @Observable can track mutations and notify observers.
+    // didSet keeps UserDefaults in sync for persistence across launches.
+    var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "sunshift.hasCompletedOnboarding") {
+        didSet {
+            UserDefaults.standard.set(hasCompletedOnboarding, forKey: "sunshift.hasCompletedOnboarding")
+        }
     }
 }
