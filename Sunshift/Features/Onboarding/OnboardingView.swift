@@ -396,6 +396,8 @@ private struct NotificationsStep: View {
     let onBack: () -> Void
     let onDone: () -> Void
 
+    @State private var isRequestingPermission = false
+
     var body: some View {
         VStack(spacing: 0) {
             OnboardingNavBar(onBack: onBack)
@@ -424,18 +426,21 @@ private struct NotificationsStep: View {
             Spacer()
 
             VStack(spacing: SunshiftSpacing.sm) {
-                Button("Allow Notifications") {
+                Button(isRequestingPermission ? "Requesting..." : "Allow Notifications") {
+                    isRequestingPermission = true
                     Task {
                         await notificationPermissionService.requestPermission()
                         onDone()
                     }
                 }
                 .buttonStyle(OnboardingPrimaryButtonStyle())
+                .disabled(isRequestingPermission)
 
                 Button("Not now", action: onDone)
                     .font(SunshiftTypography.body())
                     .foregroundStyle(SunshiftColors.secondaryText)
                     .padding(.vertical, SunshiftSpacing.sm)
+                    .disabled(isRequestingPermission)
             }
             .padding(.horizontal, SunshiftSpacing.xl)
             .padding(.bottom, SunshiftSpacing.xxl)
