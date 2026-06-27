@@ -100,6 +100,7 @@ struct RoutineEditView: View {
             }
             .onAppear {
                 clampOffsetIfNeeded()
+                clampEventIfNeeded()
             }
         }
     }
@@ -186,10 +187,16 @@ struct RoutineEditView: View {
         subscriptionService.canUseAdvancedOffsets ? ReminderOffset.presets : freeOffsetPresets
     }
 
+    private var availableEventTypes: [SunEventType] {
+        subscriptionService.canUseAdvancedEvents
+            ? SunEventType.routineTriggerCases
+            : SunEventType.basicRoutineTriggerCases
+    }
+
     private var timingSection: some View {
         Section {
             Picker("Event", selection: $sunEventType) {
-                ForEach(SunEventType.routineTriggerCases) { event in
+                ForEach(availableEventTypes) { event in
                     Text(event.displayName).tag(event)
                 }
             }
@@ -210,8 +217,8 @@ struct RoutineEditView: View {
         } header: {
             Text("Timing")
         } footer: {
-            if !subscriptionService.canUseAdvancedOffsets {
-                Text("More timing options with Sunshift Plus.")
+            if !subscriptionService.isPlusUser {
+                Text("More light events and timing options with Sunshift Plus.")
                     .foregroundStyle(SunshiftColors.duskPurple.opacity(0.8))
             }
         }
@@ -323,6 +330,13 @@ struct RoutineEditView: View {
         let freeMinutes = Set(freeOffsetPresets.map(\.offsetMinutes))
         if !freeMinutes.contains(offsetMinutes) {
             offsetMinutes = 30
+        }
+    }
+
+    private func clampEventIfNeeded() {
+        guard !subscriptionService.canUseAdvancedEvents else { return }
+        if !SunEventType.basicRoutineTriggerCases.contains(sunEventType) {
+            sunEventType = .sunset
         }
     }
 

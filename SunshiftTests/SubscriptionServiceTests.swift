@@ -118,4 +118,17 @@ struct SubscriptionServiceTests {
         svc.isPlusUser = true
         #expect(svc.canCreateMoreThanOneRoutine)
     }
+
+    // MARK: - Advanced events gate
+
+    @Test func canUseAdvancedEvents_freeUserBlocked() {
+        let svc = SubscriptionService()
+        #expect(!svc.canUseAdvancedEvents)
+    }
+
+    @Test func canUseAdvancedEvents_plusUserAllowed() {
+        let svc = SubscriptionService()
+        svc.isPlusUser = true
+        #expect(svc.canUseAdvancedEvents)
+    }
 }

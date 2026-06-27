@@ -21,6 +21,12 @@ enum SunEventType: String, CaseIterable, Identifiable, Codable {
         allCases.filter { $0 != .daylightRemaining }
     }
 
+    // The five core events available to free users in the routine editor.
+    // Plus users have access to all routineTriggerCases.
+    static var basicRoutineTriggerCases: [SunEventType] {
+        [.sunrise, .sunset, .solarNoon, .goldenHourStart, .goldenHourEnd]
+    }
+
     var displayName: String {
         switch self {
         case .sunrise:             return "Sunrise"

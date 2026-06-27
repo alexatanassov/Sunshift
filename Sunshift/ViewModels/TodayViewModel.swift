@@ -19,6 +19,7 @@ final class TodayViewModel {
     private(set) var locationKind: LocationKind = .fallback
 
     private(set) var schedule: SunSchedule? = nil
+    private(set) var weekPreview: [DayPreview] = []
 
     private(set) var sunriseText: String = "--"
     private(set) var solarNoonText: String = "--"
@@ -106,6 +107,7 @@ final class TodayViewModel {
             nextEventTitle         = nextEvent?.displayName
             nextEventCountdownText = nextEvent.map { $0.time.timeIntervalSince(now).formattedCountdown }
 
+            weekPreview = computeWeekPreview(location: location, tz: tz, cal: cal, now: now)
             errorMessage = nil
         } catch {
             clearScheduleState()
@@ -157,6 +159,7 @@ final class TodayViewModel {
 
     private func clearScheduleState() {
         schedule               = nil
+        weekPreview            = []
         sunriseText            = "--"
         solarNoonText          = "--"
         sunsetText             = "--"
@@ -181,5 +184,37 @@ final class TodayViewModel {
         let rem = minutes % 60
         if rem == 0 { return hrs == 1 ? "1 hr" : "\(hrs) hrs" }
         return "\(hrs) hr \(rem) min"
+    }
+
+    private func computeWeekPreview(
+        location: SavedLocation,
+        tz: TimeZone,
+        cal: Calendar,
+        now: Date
+    ) -> [DayPreview] {
+        var result: [DayPreview] = []
+        for dayOffset in 0..<7 {
+            guard let candidate = cal.date(byAdding: .day, value: dayOffset, to: now) else { continue }
+            let startOfDay = cal.startOfDay(for: candidate)
+            let input = SunCalculationInput(
+                date: startOfDay,
+                latitude: location.latitude,
+                longitude: location.longitude,
+                timeZoneIdentifier: location.timeZoneIdentifier
+            )
+            guard let s = try? sunService.sunSchedule(for: input) else { continue }
+            result.append(DayPreview(
+                id: UUID(),
+                date: startOfDay,
+                timeZoneIdentifier: location.timeZoneIdentifier,
+                sunrise: s.sunrise,
+                sunset: s.sunset,
+                goldenHourStart: s.goldenHourStart,
+                goldenHourEnd: s.goldenHourEnd,
+                lastLight: s.lastLight,
+                daylightDuration: s.daylightDuration
+            ))
+        }
+        return result
     }
 }

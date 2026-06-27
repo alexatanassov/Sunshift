@@ -404,6 +404,46 @@ struct TodayViewModelTests {
         #expect(vm.nextRoutineName == "")
     }
 
+    // MARK: - Week preview
+
+    @Test func weekPreview_hasSevenDaysForNormalLocation() throws {
+        let vm = TodayViewModel()
+        let location = makeSavedLocation()
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "America/Los_Angeles")
+        vm.refresh(location: location, isUsingFallback: false, now: now)
+        #expect(vm.weekPreview.count == 7)
+    }
+
+    @Test func weekPreview_firstDayMatchesTodaysLocalDate() throws {
+        let vm = TodayViewModel()
+        let location = makeSavedLocation()
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "America/Los_Angeles")
+        vm.refresh(location: location, isUsingFallback: false, now: now)
+        let tz = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tz
+        let first = try #require(vm.weekPreview.first)
+        #expect(cal.isDate(first.date, inSameDayAs: now))
+    }
+
+    @Test func weekPreview_allDaysHaveSunriseForMidLatitudeSummer() throws {
+        let vm = TodayViewModel()
+        let location = makeSavedLocation()
+        let now = try makeDate(year: 2026, month: 6, day: 21, hour: 12, tzID: "America/Los_Angeles")
+        vm.refresh(location: location, isUsingFallback: false, now: now)
+        #expect(vm.weekPreview.count == 7)
+        #expect(vm.weekPreview.allSatisfy { $0.sunrise != nil })
+        #expect(vm.weekPreview.allSatisfy { $0.sunset != nil })
+    }
+
+    @Test func weekPreview_emptyAfterInvalidCoordinates() {
+        let vm = TodayViewModel()
+        let badLocation = makeSavedLocation(latitude: 200, longitude: 0)
+        vm.refresh(location: badLocation, isUsingFallback: false, now: Date())
+        #expect(vm.weekPreview.isEmpty)
+        #expect(vm.errorMessage != nil)
+    }
+
     // MARK: Repeated refresh
 
     @Test func secondRefresh_clearsStaleSchedule() throws {
