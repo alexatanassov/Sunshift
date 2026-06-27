@@ -4,9 +4,9 @@ Alarms that move with the sun. Sunshift lets users build routines anchored to so
 
 ---
 
-## Current Stage: Stage 6 - Notification Scheduling
+## Current Stage: Stage 7 - Free vs Plus System
 
-Local notification scheduling is implemented. `RoutineNotificationScheduler` schedules a rolling window of up to 7 one-shot `UNCalendarNotificationTrigger` requests per enabled routine, derived from the routine's solar trigger times at the active location. `SunshiftApp` calls `rescheduleAll` on launch and again whenever routines, the active location, or notification permission status changes. Disabled routines produce no notifications; their existing requests are cancelled. Deleted routines are cleared because `rescheduleAll` issues a full `cancelAll` before rescheduling only the routines currently in the store. Notification identifiers are stable, keyed to routine ID and occurrence index. Content uses the routine title and `notificationMessage`, falling back to "It's time for your routine." when the message is empty. Calendar trigger components are expressed in the location's IANA timezone.
+`SubscriptionService` is the single source of truth for entitlement state across the app. All feature gates are wired: the routine editor restricts offset presets and disables the notification message field for free users, the template picker in both the routine editor and onboarding blocks Plus-only templates, the routine list and saved locations list show tappable upsell cards when free limits are reached, and `PlusView` is a fully implemented paywall-style screen with a feature list and a subscribed state. A `#if DEBUG` developer section on `PlusView` provides a "Simulate Plus" toggle so gates can be exercised without a real purchase.
 
 ---
 
@@ -119,7 +119,7 @@ Sunshift/
 │   │   ├── LocationsView.swift          # Permission cards, active location display, saved list
 │   │   └── ManualLocationEntryView.swift # Manual lat/lon/timezone entry form with validation
 │   └── Plus/
-│       └── PlusView.swift               # Placeholder - subscription upsell / feature gate
+│       └── PlusView.swift               # Paywall-style screen: feature list, subscribed hero, developer toggle
 ├── Models/
 │   ├── ActiveLocation.swift             # Persisted pointer (UUID + timestamp) to the selected location
 │   ├── DeviceLocation.swift             # One-shot GPS result decoupled from CLLocation
@@ -164,7 +164,8 @@ Docs/
 └── SUNSHIFT_V1_PLAN.md            # Full v1 product plan and stage breakdown
 
 SunshiftTests/                                   # Unit test suite covering SunService, routines,
-                                                 # onboarding, locations, and notification scheduling
+                                                 # onboarding, locations, notification scheduling,
+                                                 # and subscription service entitlement gates
 ```
 
 ---
@@ -377,12 +378,37 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 
 ---
 
+## Implemented in Stage 7
+
+| Area | What's in place |
+|---|---|
+| `SubscriptionService` | `@Observable` final class; `tier: SubscriptionTier` (.free / .plus); `isPlusUser` computed property as the unified toggle; feature gates as computed `Bool` properties; `canAddSavedLocation(currentNonCurrentCount:)` and `canUseTemplate(_:)` as parameterized queries; `purchase()` and `restorePurchases()` stubbed for future StoreKit 2 |
+| `FreeTierLimits` | `maxActiveRoutines = 1`, `maxSavedLocations = 1`, `allowedTemplates = [.sunsetWalk, .custom]`, `previewDays = 0` |
+| Feature gates | `canCreateMoreThanOneRoutine`, `canUseAdvancedOffsets`, `canUseSavedLocations`, `canUseAdvancedEvents`, `canUseCustomNotificationMessages`; `canUseWidgets` and `canUse7DayPreview` defined for post-Stage-7 surfaces |
+| `PlusView` | Six `PlusFeatureRow` cards (unlimited routines, all templates, multiple saved locations, custom notifications, advanced timing, 7-day preview); `paywallHero` with "Get Sunshift Plus" CTA when `!isPlusUser`; `subscribedHero` confirmation state when `isPlusUser`; "Restore Purchases" button (stubbed); `#if DEBUG` developer section with "Simulate Plus" toggle |
+| Developer toggle | "Simulate Plus" toggle in the `#if DEBUG` developer section writes directly to `subscriptionService.isPlusUser`; all gated surfaces update reactively via `@Observable`; no persistence across app restarts |
+| Routines upsell | Tappable `freeLimitHint` card appears below the routine list when `isAtFreeLimit`; tapping opens `PlusView` as a sheet |
+| Locations upsell | `LocationPlusUpsell` shown in `LocationSavedSection` when `!vm.canAddManualLocation`; tapping opens `PlusView` as a sheet |
+| `RoutineEditView` enforcement | Offset picker limited to free presets (At event / 15 min / 30 min) when `!canUseAdvancedOffsets`; footer hints at Plus; `clampOffsetIfNeeded()` on `.onAppear` resets any Plus-only stored offset (5, 10, or 60 min) to 30 min for free users; notification message field disabled with footer hint when `!canUseCustomNotificationMessages`; tapping a Plus template calls `lockedTemplateHint` and shows an inline banner instead of applying the template |
+| Onboarding consistency | `TemplateCard` shows "Free" badge on Sunset Walk, "Plus" badge on Plus templates; locked templates render at 72% opacity with a lock icon; tapping a locked template shows `LockedTemplateBanner` and leaves the current selection unchanged |
+| `RoutinesViewModel` gate | `addRoutine` is a no-op when `isAtFreeLimit`; `canAddRoutine` and `isAtFreeLimit` are the single gating surface for the Routines tab |
+| Tests | `SubscriptionServiceTests.swift` (17 tests): tier default and round-trip, `canUseTemplate` for all five templates as free and Plus users, `canUseCustomNotificationMessages`, `canUseAdvancedOffsets`, `canAddSavedLocation` count gate, `canCreateMoreThanOneRoutine`. `RoutinesViewModelTests.swift` additions: free user at limit cannot add, free user with no routines can add one, Plus user can exceed free limit, template defaults preserved on add |
+
+### What is intentionally not included in Stage 7
+
+- **Real StoreKit purchases:** `purchase()` and `restorePurchases()` are stubs. `isPlusUser` is set via the debug toggle and will later be driven by StoreKit 2 entitlement checks.
+- **AlarmKit:** Not in scope for v1.
+- **Widgets:** WidgetKit is Stage 9.
+- **Analytics:** No event tracking or paywall funnel logging.
+- **Full premium feature expansion:** `canUseAdvancedEvents`, `canUseWidgets`, `canUse7DayPreview`, and `canUseSavedLocations` are defined as gates but their corresponding premium surfaces (advanced solar events in the event picker, 7-day preview, WidgetKit extension) are built in later stages.
+
+---
+
 ## Upcoming Stages
 
 | Stage | Focus |
 |---|---|
-| 7 | Free vs Plus System - feature gates wired to StoreKit 2 real purchases, paywall screen |
-| 8 | Premium Feature Buildout - unlimited routines, multiple locations, advanced offsets |
+| 8 | Premium Feature Buildout - StoreKit 2 purchase and restore flow, advanced solar events in routine editor, 7-day light preview |
 | 9 | Widgets + Travel Mode - WidgetKit extension, automatic location updates when traveling |
 | 10 | Polish + App Store Launch - accessibility, localization, App Store assets, review prompts |
 

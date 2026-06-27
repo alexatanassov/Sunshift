@@ -639,6 +639,133 @@ The prefix `sunshift.routine.<routineID>.` uniquely identifies all requests for 
 
 ---
 
+## Stage 7: Free vs Plus System
+
+Stage 7 wires the entitlement foundation built in earlier stages into every affected surface. `SubscriptionService` becomes the app-wide single source of truth. Feature gates are enforced at the UI layer across the routine editor, routine list, saved locations list, onboarding, and the new `PlusView` paywall screen.
+
+### SubscriptionService
+
+`SubscriptionService` is `@Observable` and `final`. Its fields and gates:
+
+| Member | Type | Notes |
+|---|---|---|
+| `tier` | `SubscriptionTier` | `.free` on init; set to `.plus` when Plus is active |
+| `isPlusUser` | `Bool` (computed) | Unified read/write toggle over `tier`; the only place tier is changed |
+| `canCreateMoreThanOneRoutine` | `Bool` | `isPlusUser` |
+| `canUseAdvancedOffsets` | `Bool` | `isPlusUser`; controls 5/10/60 min offset presets in the editor |
+| `canUseSavedLocations` | `Bool` | `isPlusUser`; used by future location expansion |
+| `canUseAdvancedEvents` | `Bool` | `isPlusUser`; reserved for blue hour and twilight anchors in the editor |
+| `canUseCustomNotificationMessages` | `Bool` | `isPlusUser`; controls the notification message field in `RoutineEditView` |
+| `canUseWidgets` | `Bool` | `isPlusUser`; reserved for Stage 9 |
+| `canUse7DayPreview` | `Bool` | `isPlusUser`; reserved for Stage 8 |
+| `canAddSavedLocation(currentNonCurrentCount:)` | `Bool` | Free: `count < FreeTierLimits.maxSavedLocations (1)`; Plus: always `true` |
+| `canUseTemplate(_:)` | `Bool` | `!template.requiresPlus || isPlusUser` |
+| `purchase()` | `async throws` | StoreKit 2 stub |
+| `restorePurchases()` | `async throws` | StoreKit 2 stub |
+
+### FreeTierLimits
+
+Static enum in `SubscriptionTier.swift`:
+
+| Constant | Value | Effect |
+|---|---|---|
+| `maxActiveRoutines` | `1` | Free users are blocked from creating a second routine |
+| `maxSavedLocations` | `1` | Free users can save one non-current location |
+| `allowedTemplates` | `[.sunsetWalk, .custom]` | Plus badges and locks applied to all other templates |
+| `previewDays` | `0` | Reserved for the 7-day preview gate |
+
+### Templates by tier
+
+| Template | Free | Plus |
+|---|---|---|
+| Sunset Walk | Yes | Yes |
+| Custom | Yes | Yes |
+| Morning Light | No | Yes |
+| Wind Down | No | Yes |
+| Golden Hour Shoot | No | Yes |
+
+### PlusView
+
+`PlusView` is a `NavigationStack`-wrapped scroll screen presented on the fourth tab.
+
+**Non-subscriber state:** `paywallHero` with a `sun.horizon.fill` icon and the "Build your whole day around the light." tagline; six `PlusFeatureRow` cards listing unlimited routines, all templates, multiple saved locations, custom notifications, advanced timing, and 7-day preview; a "Get Sunshift Plus" button (in release: calls `subscriptionService.purchase()`; in debug: sets `isPlusUser = true` directly); a "Restore Purchases" button (calls `subscriptionService.restorePurchases()`; stubbed).
+
+**Subscribed state:** `subscribedHero` with a `checkmark.circle.fill` icon and "All features are unlocked." copy; the same feature list; CTA section hidden.
+
+**Developer section (`#if DEBUG`):** "Simulate Plus" `Toggle` bound to `subscriptionService.isPlusUser`. All gated surfaces update reactively via `@Observable`. The toggle does not persist across app restarts.
+
+### RoutineEditView enforcement
+
+Three gates are enforced when the editor opens:
+
+**Offset presets:** `availableOffsets` returns `ReminderOffset.presets` (all: At / 5 / 10 / 15 / 30 / 60 min) for Plus users and a free-only list (At / 15 / 30 min) for free users. A footer note hints at Plus when the restricted list is shown. `clampOffsetIfNeeded()` is called on `.onAppear`; if the stored offset (e.g., 10 min from a previously Plus-eligible routine) is not in the free presets, it is reset to 30 min.
+
+**Notification message field:** `TextField` is `.disabled(!subscriptionService.canUseCustomNotificationMessages)`. A footer note hints at Plus for free users.
+
+**Template selection (create mode):** `applyTemplate(_:)` checks `canUseTemplate(_:)` before applying. If blocked, it sets `lockedTemplateHint` to the attempted template and shows a dismissible inline banner ("Morning Light is part of Sunshift Plus."). The selected template and all other fields remain unchanged.
+
+### Upsells
+
+**Routines tab:** When `RoutinesViewModel.isAtFreeLimit` is `true`, a tappable `freeLimitHint` card ("Want unlimited routines? Sunshift Plus removes the limit.") is shown below the routine list. Tapping opens `PlusView` as a sheet. The "+" toolbar button is hidden when at the free limit so the create sheet cannot be triggered another way.
+
+**Locations tab:** `LocationSavedSection` shows `LocationPlusUpsell` ("Save more places with Sunshift Plus.") when `!vm.canAddManualLocation`. Tapping opens `PlusView` as a sheet.
+
+### Onboarding consistency
+
+`TemplateCard` in `TemplatePickStep` reads `isPlusUser` from `OnboardingViewModel.selectTemplate`:
+- Sunset Walk shows a "Free" tier badge.
+- Plus templates show a "Plus" tier badge.
+- Locked templates render at 72% opacity with a lock icon at the trailing edge.
+- Tapping a locked template calls `viewModel.selectTemplate(_:isPlusUser:)`, which sets `lockedTemplateHint` rather than updating `selectedTemplate`. `LockedTemplateBanner` appears with a dismiss button.
+
+### RoutinesViewModel free gate
+
+`addRoutine(_:)` checks `canAddRoutine` (which checks `isAtFreeLimit`) and silently returns if the limit is reached. This means even if the create sheet is somehow opened, the routine is not persisted. `canAddRoutine` and `isAtFreeLimit` are the single enforcement points; the UI reads from them rather than reimplementing the check.
+
+### Test coverage
+
+**`SubscriptionServiceTests.swift` (17 tests)**
+
+| Test | What it verifies |
+|---|---|
+| `defaultTierIsFree` | Initial tier is `.free`, `isPlusUser` is `false` |
+| `toggleIsPlusUserChangesTierToPlus` | Setting `isPlusUser = true` sets `tier = .plus` |
+| `toggleIsPlusUserOffChangesTierToFree` | Round-trip back to `.free` |
+| `canUseTemplate_sunsetWalk_freeUserAllowed` | Sunset Walk is allowed on free |
+| `canUseTemplate_custom_freeUserAllowed` | Custom is allowed on free |
+| `canUseTemplate_morningLight_freeUserBlocked` | Morning Light blocked on free |
+| `canUseTemplate_windDown_freeUserBlocked` | Wind Down blocked on free |
+| `canUseTemplate_goldenHourShoot_freeUserBlocked` | Golden Hour Shoot blocked on free |
+| `canUseTemplate_allTemplates_plusUserAllowed` | All five templates allowed for Plus |
+| `canUseCustomNotificationMessages_freeUserBlocked` | Free user cannot use custom messages |
+| `canUseCustomNotificationMessages_plusUserAllowed` | Plus user can use custom messages |
+| `canUseAdvancedOffsets_freeUserBlocked` | Free user cannot use advanced offsets |
+| `canUseAdvancedOffsets_plusUserAllowed` | Plus user can use advanced offsets |
+| `canAddSavedLocation_freeUserBelowLimit_allowed` | Free user at 0 locations can add |
+| `canAddSavedLocation_freeUserAtLimit_blocked` | Free user at limit (1) is blocked |
+| `canAddSavedLocation_plusUserBeyondLimit_allowed` | Plus user at 100 locations can still add |
+| `canCreateMoreThanOneRoutine_freeUserBlocked` | Free user cannot exceed one routine |
+| `canCreateMoreThanOneRoutine_plusUserAllowed` | Plus user can exceed one routine |
+
+**`RoutinesViewModelTests.swift` additions**
+
+| Test | What it verifies |
+|---|---|
+| `freeUserAtLimitCannotAdd` | `addRoutine` is a no-op when `isAtFreeLimit`; store count stays at 1 |
+| `freeUserWithNoRoutinesCanAddOne` | Empty store allows first add; `canAddRoutine` flips to `false` after |
+| `plusUserCanAddBeyondFreeLimit` | Plus user can hold two routines |
+| `addFromTemplateCreatesExpectedDefaults` | Morning Light defaults (event, offset, direction, message) are preserved end-to-end |
+
+### What is intentionally not included in Stage 7
+
+- **Real StoreKit purchases:** `purchase()` and `restorePurchases()` on `SubscriptionService` are stubs. `isPlusUser` is set via the debug toggle; StoreKit 2 entitlement checks replace this in a future stage.
+- **AlarmKit:** Not in scope for v1.
+- **Widgets:** WidgetKit is Stage 9.
+- **Analytics:** No event tracking or paywall funnel logging.
+- **Full premium feature expansion:** `canUseAdvancedEvents`, `canUseWidgets`, `canUse7DayPreview`, and `canUseSavedLocations` are defined as gates but their corresponding features (advanced solar events in the routine editor, 7-day preview screen, WidgetKit extension) are built in later stages.
+
+---
+
 ## Post-1.0 Future Features
 
 These are not in scope for v1 but are worth keeping in mind to avoid closing off architectural doors.
