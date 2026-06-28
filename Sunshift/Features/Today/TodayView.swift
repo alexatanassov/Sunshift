@@ -48,6 +48,7 @@ struct TodayView: View {
                 TodayTimelineView(schedule: schedule, now: Date())
             }
             EventsSection(viewModel: viewModel)
+            WeekPreviewView(viewModel: viewModel)
             NextRoutineCard(viewModel: viewModel)
         }
     }
@@ -465,6 +466,7 @@ private struct TodayErrorView: View {
 
 #Preview {
     TodayView()
+        .environment(SubscriptionService())
         .environment(LocationViewModel(subscriptionService: SubscriptionService()))
         .environment(RoutineStore())
 }
