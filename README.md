@@ -4,9 +4,9 @@ Alarms that move with the sun. Sunshift lets users build routines anchored to so
 
 ---
 
-## Current Stage: Stage 7 - Free vs Plus System
+## Current Stage: Stage 8 - 7-Day Light Preview and Advanced Event Gates
 
-`SubscriptionService` is the single source of truth for entitlement state across the app. All feature gates are wired: the routine editor restricts offset presets and disables the notification message field for free users, the template picker in both the routine editor and onboarding blocks Plus-only templates, the routine list and saved locations list show tappable upsell cards when free limits are reached, and `PlusView` is a fully implemented paywall-style screen with a feature list and a subscribed state. A `#if DEBUG` developer section on `PlusView` provides a "Simulate Plus" toggle so gates can be exercised without a real purchase.
+`WeekPreviewView` adds a rolling 7-day light preview card to the Today screen, gated to Plus users. Free users see a tappable locked row that opens `PlusView`. `TodayViewModel` generates the preview data via `computeWeekPreview`, calling `SunService` once per calendar day for offsets 0-6 from today. `DayPreview` carries per-day sunrise, sunset, golden hour, and daylight duration. `RoutineEditView` now enforces `SunEventType.basicRoutineTriggerCases` for free users, restricting the event picker to five core events; `clampEventIfNeeded()` resets any stored Plus-only anchor to `.sunset` on `.onAppear`.
 
 ---
 
@@ -111,7 +111,8 @@ Sunshift/
 │   │   └── OnboardingViewModel.swift    # Step navigation, template selection, timing state, buildRoutine()
 │   ├── Today/
 │   │   ├── TodayView.swift              # Main Today tab; routes between empty, loading, error, and content states
-│   │   └── TodayTimelineView.swift      # Horizontal day timeline bar with gradient and now-indicator dot
+│   │   ├── TodayTimelineView.swift      # Horizontal day timeline bar with gradient and now-indicator dot
+│   │   └── WeekPreviewView.swift        # Plus-gated 7-day light preview card; free users see a locked upsell row
 │   ├── Routines/
 │   │   ├── RoutinesView.swift           # Routine list: rows with enable toggle, create/edit sheet entry points
 │   │   └── RoutineEditView.swift        # Create/edit sheet: name, template picker, timing, weekday chips, delete
@@ -132,8 +133,9 @@ Sunshift/
 │   ├── SunCalculationInput.swift        # Input type: date, latitude, longitude, timeZoneIdentifier
 │   ├── SunSchedule.swift                # Output type: all computed solar events for one local day
 │   ├── SunSchedule+Events.swift         # orderedEvents, nextEvent(after:), daylightRemaining(at:), event(for:)
+│   ├── DayPreview.swift                 # Per-day preview model: sunrise, sunset, golden hour, daylight duration
 │   ├── SunEvent.swift                   # Single solar event (type + time)
-│   ├── SunEventType.swift               # Enum with routineTriggerCases (excludes daylightRemaining)
+│   ├── SunEventType.swift               # Enum with routineTriggerCases and basicRoutineTriggerCases
 │   ├── LightRoutine.swift               # User-defined routine: event anchor, offset, weekdays, enabled flag
 │   ├── ReminderOffset.swift             # Offset enum: atEvent, preset(minutes:), custom(minutes:)
 │   ├── SavedLocation.swift              # Named lat/lon; includes source, isCurrentLocation, isHomeLocation
@@ -384,7 +386,7 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 |---|---|
 | `SubscriptionService` | `@Observable` final class; `tier: SubscriptionTier` (.free / .plus); `isPlusUser` computed property as the unified toggle; feature gates as computed `Bool` properties; `canAddSavedLocation(currentNonCurrentCount:)` and `canUseTemplate(_:)` as parameterized queries; `purchase()` and `restorePurchases()` stubbed for future StoreKit 2 |
 | `FreeTierLimits` | `maxActiveRoutines = 1`, `maxSavedLocations = 1`, `allowedTemplates = [.sunsetWalk, .custom]`, `previewDays = 0` |
-| Feature gates | `canCreateMoreThanOneRoutine`, `canUseAdvancedOffsets`, `canUseSavedLocations`, `canUseAdvancedEvents`, `canUseCustomNotificationMessages`; `canUseWidgets` and `canUse7DayPreview` defined for post-Stage-7 surfaces |
+| Feature gates | `canCreateMoreThanOneRoutine`, `canUseAdvancedOffsets`, `canUseSavedLocations`, `canUseAdvancedEvents`, `canUseCustomNotificationMessages`; `canUseWidgets` and `canUse7DayPreview` defined as gates (`canUseAdvancedEvents` and `canUse7DayPreview` are wired in Stage 8; `canUseWidgets` is Stage 9) |
 | `PlusView` | Six `PlusFeatureRow` cards (unlimited routines, all templates, multiple saved locations, custom notifications, advanced timing, 7-day preview); `paywallHero` with "Get Sunshift Plus" CTA when `!isPlusUser`; `subscribedHero` confirmation state when `isPlusUser`; "Restore Purchases" button (stubbed); `#if DEBUG` developer section with "Simulate Plus" toggle |
 | Developer toggle | "Simulate Plus" toggle in the `#if DEBUG` developer section writes directly to `subscriptionService.isPlusUser`; all gated surfaces update reactively via `@Observable`; no persistence across app restarts |
 | Routines upsell | Tappable `freeLimitHint` card appears below the routine list when `isAtFreeLimit`; tapping opens `PlusView` as a sheet |
@@ -400,7 +402,35 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 - **AlarmKit:** Not in scope for v1.
 - **Widgets:** WidgetKit is Stage 9.
 - **Analytics:** No event tracking or paywall funnel logging.
-- **Full premium feature expansion:** `canUseAdvancedEvents`, `canUseWidgets`, `canUse7DayPreview`, and `canUseSavedLocations` are defined as gates but their corresponding premium surfaces (advanced solar events in the event picker, 7-day preview, WidgetKit extension) are built in later stages.
+- **Full premium feature expansion:** `canUseWidgets` and `canUseSavedLocations` are defined as gates but their corresponding surfaces (WidgetKit extension, saved location expansion beyond Stage 2) are built in later stages. `canUseAdvancedEvents` and `canUse7DayPreview` are wired in Stage 8.
+
+---
+
+## Implemented in Stage 8
+
+| Area | What's in place |
+|---|---|
+| `DayPreview` model | `Identifiable`, `Equatable` value type; fields: `id`, `date`, `timeZoneIdentifier`, `sunrise`, `sunset`, `goldenHourStart`, `goldenHourEnd`, `lastLight`, `daylightDuration`; all event fields are `Date?` to represent polar and nil-event conditions |
+| `TodayViewModel` week generation | `computeWeekPreview(location:tz:cal:now:)` iterates day offsets 0-6 from `now`; extracts `startOfDay` in the location's timezone; calls `SunService.sunSchedule(for:)` and skips days that throw; populates `weekPreview: [DayPreview]`; `clearScheduleState()` resets `weekPreview = []` on error |
+| 7-day rolling preview | Starts at today's local calendar date in the active location's timezone; covers 7 consecutive days; days where `SunService` throws are silently omitted |
+| `WeekPreviewView` | Plus-gated card added to the Today content stack between `EventsSection` and `NextRoutineCard`; reads `subscriptionService.canUse7DayPreview`; Plus branch renders `WeekPreviewRow` for each of up to 7 days; free branch renders a tappable locked row |
+| Free locked state | Locked row is a `Button` that opens `PlusView` as a `.sheet`; copy: "Sunrise and sunset for the next 7 days. Available with Sunshift Plus."; `lock.fill` icon at trailing edge |
+| Plus weekly rows | Each `WeekPreviewRow` shows abbreviated weekday + day number, sunrise time with `sunrise.fill` icon, sunset time with `sunset.fill` icon, and total daylight duration; all columns use monospaced digits |
+| Timezone-aware formatting | `WeekPreviewRow` resolves `TimeZone(identifier: preview.timeZoneIdentifier) ?? .current`; all `DateFormatter` instances and `Date.formattedTime(in:)` calls use the location's timezone, not the device timezone |
+| Polar / nil event fallback | When `sunrise` or `sunset` is `nil` on a `DayPreview` entry, the row renders "--" for that column; no separate polar label is shown in the weekly view |
+| `SunEventType.basicRoutineTriggerCases` | New static property on `SunEventType`; returns `[.sunrise, .sunset, .solarNoon, .goldenHourStart, .goldenHourEnd]`; the five events available to free users in the routine editor |
+| Advanced event gate in `RoutineEditView` | `availableEventTypes` returns `SunEventType.routineTriggerCases` (all 11 trigger types) for Plus users and `SunEventType.basicRoutineTriggerCases` (5 events) for free users; `clampEventIfNeeded()` called on `.onAppear` resets any stored Plus-only event type (e.g. `.blueHourStart`) to `.sunset` for free users; Timing section footer shows "More light events and timing options with Sunshift Plus." when free |
+| Tests - week preview | `TodayViewModelTests`: `weekPreview_hasSevenDaysForNormalLocation`, `weekPreview_firstDayMatchesTodaysLocalDate`, `weekPreview_allDaysHaveSunriseForMidLatitudeSummer`, `weekPreview_emptyAfterInvalidCoordinates` |
+| Tests - advanced event gate | `SubscriptionServiceTests`: `canUseAdvancedEvents_freeUserBlocked`, `canUseAdvancedEvents_plusUserAllowed` |
+
+### What is intentionally not included in Stage 8
+
+- **Real StoreKit purchases:** `purchase()` and `restorePurchases()` are stubs. `isPlusUser` is set via the debug toggle.
+- **AlarmKit:** Not in scope for v1.
+- **Widgets:** WidgetKit is Stage 9.
+- **Advanced weekly detail screen:** Tapping a `WeekPreviewRow` does not navigate to a detail view.
+- **Weather or UV data:** The weekly preview shows solar event times only.
+- **Travel mode:** Automatic location updates when traveling are Stage 9.
 
 ---
 
@@ -408,7 +438,6 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 
 | Stage | Focus |
 |---|---|
-| 8 | Premium Feature Buildout - StoreKit 2 purchase and restore flow, advanced solar events in routine editor, 7-day light preview |
 | 9 | Widgets + Travel Mode - WidgetKit extension, automatic location updates when traveling |
-| 10 | Polish + App Store Launch - accessibility, localization, App Store assets, review prompts |
+| 10 | Polish + App Store Launch - StoreKit 2 purchase flow, accessibility, localization, App Store assets, review prompts |
 

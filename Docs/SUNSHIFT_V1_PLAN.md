@@ -654,10 +654,10 @@ Stage 7 wires the entitlement foundation built in earlier stages into every affe
 | `canCreateMoreThanOneRoutine` | `Bool` | `isPlusUser` |
 | `canUseAdvancedOffsets` | `Bool` | `isPlusUser`; controls 5/10/60 min offset presets in the editor |
 | `canUseSavedLocations` | `Bool` | `isPlusUser`; used by future location expansion |
-| `canUseAdvancedEvents` | `Bool` | `isPlusUser`; reserved for blue hour and twilight anchors in the editor |
+| `canUseAdvancedEvents` | `Bool` | `isPlusUser`; gates blue hour, twilight, and first/last light anchors in `RoutineEditView`; implemented in Stage 8 |
 | `canUseCustomNotificationMessages` | `Bool` | `isPlusUser`; controls the notification message field in `RoutineEditView` |
 | `canUseWidgets` | `Bool` | `isPlusUser`; reserved for Stage 9 |
-| `canUse7DayPreview` | `Bool` | `isPlusUser`; reserved for Stage 8 |
+| `canUse7DayPreview` | `Bool` | `isPlusUser`; gates `WeekPreviewView` on the Today screen; implemented in Stage 8 |
 | `canAddSavedLocation(currentNonCurrentCount:)` | `Bool` | Free: `count < FreeTierLimits.maxSavedLocations (1)`; Plus: always `true` |
 | `canUseTemplate(_:)` | `Bool` | `!template.requiresPlus || isPlusUser` |
 | `purchase()` | `async throws` | StoreKit 2 stub |
@@ -762,7 +762,111 @@ Three gates are enforced when the editor opens:
 - **AlarmKit:** Not in scope for v1.
 - **Widgets:** WidgetKit is Stage 9.
 - **Analytics:** No event tracking or paywall funnel logging.
-- **Full premium feature expansion:** `canUseAdvancedEvents`, `canUseWidgets`, `canUse7DayPreview`, and `canUseSavedLocations` are defined as gates but their corresponding features (advanced solar events in the routine editor, 7-day preview screen, WidgetKit extension) are built in later stages.
+- **Full premium feature expansion:** `canUseWidgets` and `canUseSavedLocations` are defined as gates but their corresponding features (WidgetKit extension, saved location expansion) are built in later stages. `canUseAdvancedEvents` and `canUse7DayPreview` are wired in Stage 8.
+
+---
+
+## Stage 8: 7-Day Light Preview and Advanced Event Gates
+
+Stage 8 builds two Plus features that were already gated by `SubscriptionService` (`canUse7DayPreview`, `canUseAdvancedEvents`) but had no corresponding UI. This stage adds the weekly light preview card on the Today screen and wires the advanced event picker gate in the routine editor.
+
+### DayPreview model
+
+`DayPreview` is a new `Identifiable`, `Equatable` struct (`Sunshift/Models/DayPreview.swift`).
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | `UUID` | Stable identity for `ForEach` |
+| `date` | `Date` | `startOfDay` in the location's timezone |
+| `timeZoneIdentifier` | `String` | IANA identifier; passed to the view layer for display formatting |
+| `sunrise` | `Date?` | `nil` on polar day or when the sun never crosses the horizon threshold |
+| `sunset` | `Date?` | `nil` on polar day or when the sun never crosses the horizon threshold |
+| `goldenHourStart` | `Date?` | Morning golden hour start |
+| `goldenHourEnd` | `Date?` | Evening golden hour start (sun drops below +6 degrees) |
+| `lastLight` | `Date?` | Civil dusk |
+| `daylightDuration` | `TimeInterval?` | Seconds from sunrise to sunset; `nil` when either is `nil` |
+
+### TodayViewModel week preview generation
+
+`TodayViewModel.computeWeekPreview(location:tz:cal:now:)` is a private helper called at the end of `refresh`. It iterates `dayOffset` in `0..<7`:
+
+1. Computes `candidate = cal.date(byAdding: .day, value: dayOffset, to: now)`.
+2. Extracts `startOfDay` via `cal.startOfDay(for: candidate)` using the location's timezone.
+3. Builds a `SunCalculationInput` for `startOfDay`.
+4. Calls `try? sunService.sunSchedule(for: input)` and skips any day that returns `nil`.
+5. Appends a `DayPreview` from the schedule fields.
+
+The result is assigned to `weekPreview: [DayPreview]`, exposed as a `private(set)` property. `clearScheduleState()` (called on error) sets `weekPreview = []`.
+
+### WeekPreviewView
+
+`WeekPreviewView` (`Sunshift/Features/Today/WeekPreviewView.swift`) is embedded in the `TodayView` content stack between `EventsSection` and `NextRoutineCard`. It reads `subscriptionService.canUse7DayPreview` from `@Environment` and branches:
+
+**Plus (unlocked):** Shows up to 7 `WeekPreviewRow` entries from `viewModel.weekPreview.prefix(7)`. If `weekPreview` is empty, shows "Weekly light data is unavailable for this location."
+
+**Free (locked):** A `Button` row with a `sparkles` icon, copy "Sunrise and sunset for the next 7 days. Available with Sunshift Plus.", and a `lock.fill` icon. Tapping sets `showingPlus = true`, which presents `PlusView` as a `.sheet`.
+
+### WeekPreviewRow
+
+Each row shows:
+
+- **Day label:** Abbreviated weekday (EEE) stacked over day number (d), both formatted in the location's timezone.
+- **Sunrise:** `sunrise.fill` icon + time string, or "--" when nil.
+- **Sunset:** `sunset.fill` icon + time string, or "--" when nil.
+- **Duration:** `daylightDuration` via `TimeInterval.formattedDuration`, right-aligned; or "--" when nil.
+
+All time strings use monospaced digits. `WeekPreviewRow` constructs `TimeZone(identifier: preview.timeZoneIdentifier) ?? .current` and passes it to all `DateFormatter` instances and `Date.formattedTime(in:)` calls.
+
+### Polar and nil event handling
+
+`DayPreview` stores all event fields as `Date?`. When `SunService` returns `nil` for an event, the field is `nil`. `WeekPreviewRow` renders "--" for nil fields. No special polar label is added in the weekly view.
+
+### basicRoutineTriggerCases for free users
+
+`SunEventType.basicRoutineTriggerCases` is a new static property returning the five events available to free users in the routine editor:
+
+- `.sunrise`
+- `.sunset`
+- `.solarNoon`
+- `.goldenHourStart`
+- `.goldenHourEnd`
+
+Plus users see all of `routineTriggerCases`, which adds `.blueHourStart`, `.blueHourEnd`, `.firstLight`, `.lastLight`, `.civilTwilightStart`, `.civilTwilightEnd`.
+
+### Advanced event gate in RoutineEditView
+
+`availableEventTypes` is a computed property in `RoutineEditView`:
+- Free: `SunEventType.basicRoutineTriggerCases` (5 events).
+- Plus: `SunEventType.routineTriggerCases` (11 events).
+
+`clampEventIfNeeded()` is called on `.onAppear`. If the stored `sunEventType` is not in `basicRoutineTriggerCases`, it resets to `.sunset`. The Timing section footer shows "More light events and timing options with Sunshift Plus." for free users (combined with the existing advanced offsets hint).
+
+### Test coverage
+
+**`TodayViewModelTests.swift` additions (4 tests):**
+
+| Test | What it verifies |
+|---|---|
+| `weekPreview_hasSevenDaysForNormalLocation` | Normal mid-latitude location produces exactly 7 entries |
+| `weekPreview_firstDayMatchesTodaysLocalDate` | First entry date is the same local calendar day as `now` in the location's timezone |
+| `weekPreview_allDaysHaveSunriseForMidLatitudeSummer` | All 7 entries have non-nil `sunrise` and `sunset` for San Francisco in June |
+| `weekPreview_emptyAfterInvalidCoordinates` | Invalid coordinates produce an empty `weekPreview` and a non-nil `errorMessage` |
+
+**`SubscriptionServiceTests.swift` additions (2 tests):**
+
+| Test | What it verifies |
+|---|---|
+| `canUseAdvancedEvents_freeUserBlocked` | Free user cannot use advanced events |
+| `canUseAdvancedEvents_plusUserAllowed` | Plus user can use advanced events |
+
+### What is intentionally not included in Stage 8
+
+- **Real StoreKit purchases:** `purchase()` and `restorePurchases()` are stubs. `isPlusUser` is set via the debug toggle.
+- **AlarmKit:** Not in scope for v1.
+- **Widgets:** WidgetKit is Stage 9.
+- **Advanced weekly detail screen:** Tapping a `WeekPreviewRow` does not navigate to a detail view.
+- **Weather or UV data:** The weekly preview shows solar event times only.
+- **Travel mode:** Automatic location updates when traveling are Stage 9.
 
 ---
 
