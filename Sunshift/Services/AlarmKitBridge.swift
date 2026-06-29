@@ -52,6 +52,12 @@ final class AlarmKitBridge {
         }
     }
 
+    func cancel(routineID: UUID) {
+        if #available(iOS 26.0, *) {
+            scheduler.cancel(routineID: routineID)
+        }
+    }
+
     func cancelAll(_ routines: [LightRoutine]) {
         if #available(iOS 26.0, *) {
             scheduler.cancelAll(routines)

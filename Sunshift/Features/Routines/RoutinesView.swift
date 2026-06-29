@@ -3,6 +3,7 @@ import SwiftUI
 struct RoutinesView: View {
     @Environment(RoutinesViewModel.self) private var viewModel
     @Environment(SubscriptionService.self) private var subscriptionService
+    @Environment(AlarmKitBridge.self) private var alarmKitBridge
     @State private var showingCreate = false
     @State private var editingRoutine: LightRoutine?
     @State private var showingPlus = false
@@ -61,6 +62,7 @@ struct RoutinesView: View {
                     },
                     onCancel: { editingRoutine = nil },
                     onDelete: {
+                        alarmKitBridge.cancel(routineID: routine.id)
                         viewModel.deleteRoutine(id: routine.id)
                         editingRoutine = nil
                     }

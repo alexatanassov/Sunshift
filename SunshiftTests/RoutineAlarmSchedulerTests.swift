@@ -176,10 +176,31 @@ struct RoutineAlarmSchedulerTests {
 
     // MARK: - Deleted routine
 
-    // Limitation: rescheduleAll cancels only the alarms for routines in the provided array.
-    // Alarms for routines removed from the store are NOT automatically cancelled because
-    // the scheduler has no persistent registry. Call cancel(routineID:) explicitly when
-    // deleting a routine. This test documents the design constraint rather than testing it.
+    // rescheduleAll cancels only the alarms for routines in the provided array.
+    // RoutinesView calls alarmKitBridge.cancel(routineID:) before deleteRoutine so the
+    // routine's alarms are removed before it disappears from the store. This test
+    // verifies that sequence leaves no orphan alarms.
+    @Test func cancelRoutineBeforeDeletionLeavesNoOrphanAlarms() async throws {
+        let now = try makeDate(year: 2026, month: 6, day: 23, hour: 12)
+        let mock = MockAlarmSchedulingCenter()
+        let scheduler = RoutineAlarmScheduler(center: mock)
+        let location = makeLocation()
+        let routine = makeRoutine()
+
+        // Routine is active and fully scheduled.
+        await scheduler.rescheduleAll([routine], location: location, authState: .authorized, now: now)
+        #expect(mock.scheduled.count == 7)
+
+        // Simulate the delete path: cancel before removing from store, then reschedule
+        // with the now-empty array (as scheduleAll in SunshiftApp will do next).
+        scheduler.cancel(routineID: routine.id)
+        await scheduler.rescheduleAll([], location: location, authState: .authorized, now: now)
+
+        let routineAlarmIDs = Set((0..<7).map { RoutineAlarmScheduler.alarmID(for: routine.id, occurrenceIndex: $0) })
+        let remainingIDs = Set(mock.scheduled.map(\.id))
+        #expect(remainingIDs.isDisjoint(with: routineAlarmIDs))
+        #expect(mock.scheduled.isEmpty)
+    }
 
     // MARK: - Identifier stability
 
