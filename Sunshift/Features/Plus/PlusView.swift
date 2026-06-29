@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlusView: View {
     @Environment(SubscriptionService.self) private var subscriptionService
+    @State private var showingPurchaseUnavailable = false
 
     var body: some View {
         NavigationStack {
@@ -31,6 +32,11 @@ struct PlusView: View {
             .background(SunshiftColors.softBackground)
             .navigationTitle("Plus")
             .navigationBarTitleDisplayMode(.large)
+            .alert("In-App Purchases Coming Soon", isPresented: $showingPurchaseUnavailable) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Sunshift Plus is not available for purchase in this build yet.")
+            }
         }
         .background(SunshiftColors.softBackground)
     }
@@ -113,6 +119,12 @@ struct PlusView: View {
                 detail: "Fine-grained offsets: 5, 10, and 60 minute options."
             )
             PlusFeatureRow(
+                icon: "moon.haze.fill",
+                color: SunshiftColors.duskPurple,
+                title: "Advanced Light Events",
+                detail: "Blue hour, civil twilight, and first and last light as routine anchors."
+            )
+            PlusFeatureRow(
                 icon: "calendar",
                 color: SunshiftColors.duskPurple,
                 title: "7-Day Light Preview",
@@ -130,7 +142,7 @@ struct PlusView: View {
                 #if DEBUG
                 subscriptionService.isPlusUser = true
                 #else
-                Task { try? await subscriptionService.purchase() }
+                showingPurchaseUnavailable = true
                 #endif
             } label: {
                 Text("Get Sunshift Plus")
@@ -144,7 +156,11 @@ struct PlusView: View {
             .padding(.horizontal, SunshiftSpacing.md)
 
             Button {
+                #if DEBUG
                 Task { try? await subscriptionService.restorePurchases() }
+                #else
+                showingPurchaseUnavailable = true
+                #endif
             } label: {
                 Text("Restore Purchases")
                     .font(SunshiftTypography.caption())
@@ -216,6 +232,8 @@ private struct PlusFeatureRow: View {
             in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium)
         )
         .cardShadow()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(detail).")
     }
 }
 
