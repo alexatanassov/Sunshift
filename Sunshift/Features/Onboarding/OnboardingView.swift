@@ -411,12 +411,12 @@ private struct NotificationsStep: View {
                     .foregroundStyle(SunshiftColors.duskPurple)
 
                 VStack(spacing: SunshiftSpacing.sm) {
-                    Text("Get reminded at the right time")
+                    Text("Set up your alerts")
                         .font(SunshiftTypography.display(26))
                         .foregroundStyle(SunshiftColors.primaryText)
                         .multilineTextAlignment(.center)
 
-                    Text("Sunshift needs notifications to remind you when your routine time arrives.")
+                    Text("Sunshift will let you know when your routine time arrives. On this device, you may see a prompt for notifications and one for alarms.")
                         .font(SunshiftTypography.body())
                         .foregroundStyle(SunshiftColors.secondaryText)
                         .multilineTextAlignment(.center)

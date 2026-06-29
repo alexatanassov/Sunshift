@@ -22,6 +22,7 @@ struct RoutineEditView: View {
     @State private var isEnabled: Bool
     @State private var notificationMessage: String
     @State private var lockedTemplateHint: RoutineTemplate? = nil
+    @State private var showingPlusForMessage = false
 
     private var isCreating: Bool {
         if case .create = mode { return true }
@@ -101,6 +102,10 @@ struct RoutineEditView: View {
             .onAppear {
                 clampOffsetIfNeeded()
                 clampEventIfNeeded()
+            }
+            .sheet(isPresented: $showingPlusForMessage) {
+                PlusView()
+                    .environment(subscriptionService)
             }
         }
     }
@@ -242,6 +247,11 @@ struct RoutineEditView: View {
                 .font(SunshiftTypography.body())
                 .lineLimit(3, reservesSpace: false)
                 .disabled(!subscriptionService.canUseCustomNotificationMessages)
+                .overlay {
+                    if !subscriptionService.canUseCustomNotificationMessages {
+                        Button { showingPlusForMessage = true } label: { Color.clear }
+                    }
+                }
         } header: {
             Text("Message")
         } footer: {
