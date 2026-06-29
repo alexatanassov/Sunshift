@@ -10,7 +10,7 @@ protocol NotificationSchedulingCenter {
     func pendingNotificationRequests() async -> [UNNotificationRequest]
 }
 
-extension UNUserNotificationCenter: @retroactive NotificationSchedulingCenter {}
+extension UNUserNotificationCenter: NotificationSchedulingCenter {}
 
 // MARK: - Scheduler
 
@@ -32,11 +32,11 @@ final class RoutineNotificationScheduler {
     private let sunService: SunService
 
     init(
-        center: any NotificationSchedulingCenter = UNUserNotificationCenter.current(),
-        sunService: SunService = SunService()
+        center: (any NotificationSchedulingCenter)? = nil,
+        sunService: SunService? = nil
     ) {
-        self.center = center
-        self.sunService = sunService
+        self.center = center ?? UNUserNotificationCenter.current()
+        self.sunService = sunService ?? SunService()
     }
 
     // MARK: - Stable identifier helpers

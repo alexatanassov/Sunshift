@@ -862,11 +862,108 @@ Plus users see all of `routineTriggerCases`, which adds `.blueHourStart`, `.blue
 ### What is intentionally not included in Stage 8
 
 - **Real StoreKit purchases:** `purchase()` and `restorePurchases()` are stubs. `isPlusUser` is set via the debug toggle.
-- **AlarmKit:** Not in scope for v1.
-- **Widgets:** WidgetKit is Stage 9.
+- **AlarmKit:** Implemented in Stage 9.
+- **Widgets:** WidgetKit is a future stage.
 - **Advanced weekly detail screen:** Tapping a `WeekPreviewRow` does not navigate to a detail view.
 - **Weather or UV data:** The weekly preview shows solar event times only.
-- **Travel mode:** Automatic location updates when traveling are Stage 9.
+
+---
+
+## Stage 9: AlarmKit Foundation
+
+Stage 9 adds AlarmKit as the primary alert mechanism for all users. When the user grants AlarmKit authorization, Sunshift schedules alarm-style alerts instead of standard push notifications. `RoutineNotificationScheduler` remains the fallback when AlarmKit is unavailable or not authorized.
+
+### Product Decision: AlarmKit Is Core, Not Plus
+
+AlarmKit alarm-style alerts are available to all users:
+
+- **Free users** get alarm-style alerts for their one allowed routine.
+- **Plus users** get alarm-style alerts for all their unlimited routines.
+
+There is no `canUseAlarmAlerts` gate in `SubscriptionService` and no "Alarm-style alerts" row in `PlusView`.
+
+### Architecture
+
+**`AlarmPermissionService`** (`@Observable`, `@available(iOS 26.0, *)`)
+
+Wraps `AlarmManager.shared`. On init it reads `AlarmManager.shared.authorizationState` and starts an async task observing `AlarmManager.shared.authorizationUpdates`. `requestPermission()` calls `AlarmManager.shared.requestAuthorization()` and stores the result.
+
+**`SunshiftAlarmMetadata: AlarmMetadata`** (`@available(iOS 26.0, *)`)
+
+Empty struct satisfying the generic constraint on `AlarmAttributes`.
+
+**`AlarmSchedulingCenter` protocol** (`@available(iOS 26.0, *)`)
+
+Abstracts `AlarmManager.shared` for testability. Methods: `schedule(id:date:title:)`, `cancel(id:)`. Property: `authorizationState`.
+
+**`LiveAlarmSchedulingCenter`** (`@available(iOS 26.0, *)`)
+
+Concrete implementation. Builds `AlarmPresentation.Alert(title:secondaryButton:secondaryButtonBehavior:)`, `AlarmPresentation(alert:)`, `AlarmAttributes<SunshiftAlarmMetadata>(presentation:metadata:tintColor:)`, and `AlarmManager.AlarmConfiguration.alarm(schedule: .fixed(date), attributes:)`. Calls `AlarmManager.shared.schedule(id:configuration:)`.
+
+**`RoutineAlarmScheduler`** (`@MainActor final class`, `@available(iOS 26.0, *)`)
+
+| Method | Behavior |
+|---|---|
+| `alarmID(for:occurrenceIndex:)` | Deterministic UUID: bytes 0-13 from routineID, bytes 14-15 encode the occurrence index |
+| `cancel(routineID:)` | Cancels all 7 deterministic occurrence IDs for the routine |
+| `cancelAll(_:)` | Calls `cancel(routineID:)` for each routine in the array |
+| `scheduleOccurrences(for:location:authState:now:)` | Guards `authState == .authorized` and `routine.isEnabled`; computes up to 7 solar trigger dates; schedules each with a deterministic alarm ID |
+| `rescheduleAll(_:location:authState:now:)` | Calls `cancelAll` then schedules enabled routines |
+
+The solar trigger date computation mirrors `RoutineNotificationScheduler`: iterates up to 49 days, filters by weekday selection, resolves the solar event via `SunService`, and applies the before/after offset.
+
+**`AlarmKitBridge`** (`@Observable final class`, no `@available`)
+
+Centralizes all AlarmKit availability checks. Holds `AlarmPermissionService` and `RoutineAlarmScheduler` as `AnyObject?`, initialized only inside `if #available(iOS 26.0, *)`. Exposes:
+
+| Method/Property | Notes |
+|---|---|
+| `isAlarmKitAuthorized: Bool` | Returns `false` on older OS |
+| `rescheduleAll(_:location:)` | Forwards to scheduler with current auth state |
+| `cancelAll(_:)` | Forwards to scheduler |
+| `requestAlarmPermission()` | Forwards to permission service |
+| `makeAuthorizationChangesStream() -> AsyncStream<Void>` | Wraps `AlarmManager.shared.authorizationUpdates`; SunshiftApp iterates this without importing AlarmKit |
+
+### SunshiftApp Integration
+
+`scheduleAll()` is updated:
+
+1. If `alarmKitBridge.isAlarmKitAuthorized`:
+   - Call `alarmKitBridge.rescheduleAll(routines, location:)`
+   - Cancel pending notifications via `notificationScheduler.cancelAll()`
+   - Return
+2. Else: call `alarmKitBridge.cancelAll(routines)` to remove stale alarms, then fall back to `notificationScheduler.rescheduleAll(...)`
+
+An additional `.task` in `WindowGroup.body` loops over `alarmKitBridge.makeAuthorizationChangesStream()` and calls `scheduleAll()` on each authorization state change.
+
+### Onboarding
+
+`NotificationsStep` requests AlarmKit permission immediately after notification permission when the user taps "Allow Notifications". The "Not now" path skips both. Labels are unchanged.
+
+### Unit Tests (`RoutineAlarmSchedulerTests.swift`)
+
+| Test | What it verifies |
+|---|---|
+| `authorizedSchedulesSevenAlarmsForEverydayRoutine` | 7 alarms scheduled for an everyday sunset routine |
+| `deniedAuthSchedulesNone` | `.denied` auth state produces no alarms |
+| `notDeterminedSchedulesNone` | `.notDetermined` auth state produces no alarms |
+| `disabledRoutineCancelsAndSchedulesNone` | Disabled routine: cancel then schedule nothing |
+| `cancelRoutineRemovesSevenIDs` | `cancel(routineID:)` removes all 7 occurrence entries from the mock |
+| `cancelAllClearsCurrentRoutineAlarms` | `cancelAll([r1, r2])` empties the mock after scheduling 14 alarms |
+| `alarmIDsAreStableAndRoutineSpecific` | Same routine + same index = same ID; different routines = different IDs |
+| `alarmIDsFromDifferentRoutinesDontCollide` | 7-ID sets for two routines are fully disjoint |
+| `alarmTitleMatchesRoutineTitle` | Scheduled alarm title equals routine title |
+| `noEventInSearchWindowSchedulesNone` | Polar-day Svalbard location: no sunset events scheduled |
+| `rescheduleAllSchedulesEnabledSkipsDisabled` | Only enabled routines get scheduled |
+| `freeTierStillSchedulesAlarmBecauseAlarmKitIsCoreFeature` | No Plus gate in scheduler; authorized free routine gets 7 alarms |
+
+### Known Limitations in Stage 9
+
+- **Orphaned alarm cleanup:** `rescheduleAll` cancels only the routines in the provided array. Alarms for deleted routines persist until explicitly cancelled with `cancel(routineID:)`. The app does not currently call this on deletion.
+- **Custom sounds:** `secondaryButton: nil`; system default audio only.
+- **No snooze button.**
+- **No background rescheduling** after alarm delivery.
+- **No widgets.**
 
 ---
 

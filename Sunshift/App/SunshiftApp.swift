@@ -9,6 +9,7 @@ struct SunshiftApp: App {
     @State private var routinesViewModel: RoutinesViewModel
     @State private var notificationPermissionService = NotificationPermissionService()
     private let notificationScheduler = RoutineNotificationScheduler()
+    private let alarmKitBridge = AlarmKitBridge()
 
     init() {
         let sub = SubscriptionService()
@@ -28,8 +29,14 @@ struct SunshiftApp: App {
                 .environment(routineStore)
                 .environment(routinesViewModel)
                 .environment(notificationPermissionService)
+                .environment(alarmKitBridge)
                 .onAppear { locationViewModel.loadInitialLocation() }
                 .task { await scheduleAll() }
+                .task {
+                    for await _ in alarmKitBridge.makeAuthorizationChangesStream() {
+                        await scheduleAll()
+                    }
+                }
                 .onChange(of: routineStore.routines) {
                     Task { await scheduleAll() }
                 }
@@ -43,6 +50,16 @@ struct SunshiftApp: App {
     }
 
     private func scheduleAll() async {
+        if alarmKitBridge.isAlarmKitAuthorized {
+            await alarmKitBridge.rescheduleAll(
+                routineStore.routines,
+                location: locationViewModel.resolvedLocation
+            )
+            await notificationScheduler.cancelAll()
+            return
+        }
+        // Cancel any stale AlarmKit alarms from a prior authorized session, then fall back to notifications.
+        alarmKitBridge.cancelAll(routineStore.routines)
         await notificationScheduler.rescheduleAll(
             routineStore.routines,
             location: locationViewModel.resolvedLocation,

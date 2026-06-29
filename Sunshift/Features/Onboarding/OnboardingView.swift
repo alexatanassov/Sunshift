@@ -393,6 +393,7 @@ private struct ConfirmStep: View {
 
 private struct NotificationsStep: View {
     @Environment(NotificationPermissionService.self) private var notificationPermissionService
+    @Environment(AlarmKitBridge.self) private var alarmKitBridge
     let onBack: () -> Void
     let onDone: () -> Void
 
@@ -430,6 +431,7 @@ private struct NotificationsStep: View {
                     isRequestingPermission = true
                     Task {
                         await notificationPermissionService.requestPermission()
+                        await alarmKitBridge.requestAlarmPermission()
                         onDone()
                     }
                 }
@@ -712,4 +714,5 @@ private struct OnboardingPrimaryButtonStyle: ButtonStyle {
 #Preview("Notifications") {
     NotificationsStep(onBack: {}, onDone: {})
         .environment(NotificationPermissionService())
+        .environment(AlarmKitBridge())
 }

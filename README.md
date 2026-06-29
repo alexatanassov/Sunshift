@@ -4,9 +4,9 @@ Alarms that move with the sun. Sunshift lets users build routines anchored to so
 
 ---
 
-## Current Stage: Stage 8 - 7-Day Light Preview and Advanced Event Gates
+## Current Stage: Stage 9 - AlarmKit Foundation
 
-`WeekPreviewView` adds a rolling 7-day light preview card to the Today screen, gated to Plus users. Free users see a tappable locked row that opens `PlusView`. `TodayViewModel` generates the preview data via `computeWeekPreview`, calling `SunService` once per calendar day for offsets 0-6 from today. `DayPreview` carries per-day sunrise, sunset, golden hour, and daylight duration. `RoutineEditView` now enforces `SunEventType.basicRoutineTriggerCases` for free users, restricting the event picker to five core events; `clampEventIfNeeded()` resets any stored Plus-only anchor to `.sunset` on `.onAppear`.
+Stage 9 adds AlarmKit as the primary alert delivery mechanism for all users. `AlarmPermissionService` tracks `AlarmManager.AuthorizationState` and requests authorization. `RoutineAlarmScheduler` schedules up to 7 deterministic alarm occurrences per routine using `.fixed(Date)` schedules and `SunshiftAlarmMetadata`. `AlarmKitBridge` centralizes all AlarmKit availability checks so the rest of the app requires no `@available` annotations. When AlarmKit is authorized, `SunshiftApp.scheduleAll()` uses alarms exclusively and cancels pending notifications; otherwise it falls back to `RoutineNotificationScheduler`. AlarmKit is not Plus-gated: free users receive alarm-style alerts for their one allowed routine.
 
 ---
 
@@ -145,8 +145,11 @@ Sunshift/
 │   ├── DeviceLocationService.swift      # CLLocationManager wrapper; one-shot requestLocation()
 │   ├── LocationGeocodingService.swift   # CLGeocoder reverse geocoding; builds SavedLocation from placemark
 │   ├── LocationStore.swift              # @Observable; persists savedLocations + activeLocationID to UserDefaults
+│   ├── AlarmKitBridge.swift             # @Observable facade; centralizes AlarmKit availability so callers skip @available annotations
+│   ├── AlarmPermissionService.swift     # @Observable @available(iOS 26.0, *); tracks AlarmManager.AuthorizationState; requests authorization
 │   ├── NotificationPermissionService.swift  # @Observable; tracks UNAuthorizationStatus; requests authorization via UNUserNotificationCenter
-│   ├── RoutineNotificationScheduler.swift   # @MainActor; schedules rolling one-shot UNCalendarNotificationTrigger requests per routine; cancels stale notifications
+│   ├── RoutineAlarmScheduler.swift      # @MainActor @available(iOS 26.0, *); AlarmSchedulingCenter protocol + LiveAlarmSchedulingCenter + SunshiftAlarmMetadata + RoutineAlarmScheduler
+│   ├── RoutineNotificationScheduler.swift   # @MainActor; schedules rolling one-shot UNCalendarNotificationTrigger requests per routine; fallback when AlarmKit unavailable
 │   ├── RoutineStore.swift               # @Observable; persists [LightRoutine] to UserDefaults; starts empty; first routine added by onboarding
 │   ├── RoutineScheduler.swift           # Static; nextTriggerDate scans up to 8 days, respects weekdays and offsets
 │   ├── SunService.swift                 # NOAA-style solar position engine; no network required
@@ -434,10 +437,37 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 
 ---
 
+## Implemented in Stage 9
+
+| Area | What's in place |
+|---|---|
+| `AlarmPermissionService` | `@Observable final class`; `@available(iOS 26.0, *)`; tracks `AlarmManager.AuthorizationState`; requests authorization via `AlarmManager.shared.requestAuthorization()`; observes `AlarmManager.shared.authorizationUpdates` for reactive state |
+| `SunshiftAlarmMetadata` | `struct SunshiftAlarmMetadata: AlarmMetadata {}`; required payload for `AlarmAttributes` |
+| `AlarmSchedulingCenter` protocol | Abstracts `AlarmManager.shared` scheduling calls for testability; `schedule(id:date:title:)`, `cancel(id:)`, `authorizationState` |
+| `LiveAlarmSchedulingCenter` | Concrete implementation; builds `AlarmPresentation.Alert`, `AlarmPresentation`, `AlarmAttributes<SunshiftAlarmMetadata>`, and `AlarmManager.AlarmConfiguration.alarm(schedule: .fixed(date), attributes:)`; calls `AlarmManager.shared.schedule(id:configuration:)` |
+| `RoutineAlarmScheduler` | `@MainActor final class`; `@available(iOS 26.0, *)`; `alarmID(for:occurrenceIndex:)` derives deterministic UUIDs (bytes 0-13 from routineID, bytes 14-15 encode index); `cancel(routineID:)` cancels 7 occurrence IDs; `cancelAll(_:)` cancels for a routine array; `scheduleOccurrences(for:location:authState:now:)` computes up to 7 solar trigger dates (same logic as `RoutineNotificationScheduler`); `rescheduleAll(_:location:authState:now:)` cancels then reschedules |
+| `AlarmKitBridge` | `@Observable final class`; no `@available` requirement; holds `AlarmPermissionService` and `RoutineAlarmScheduler` as `AnyObject?`; exposes `isAlarmKitAuthorized`, `rescheduleAll(_:location:)`, `cancelAll(_:)`, `requestAlarmPermission()`, `makeAuthorizationChangesStream() -> AsyncStream<Void>`; callers import no AlarmKit |
+| `SunshiftApp` integration | `private let alarmKitBridge = AlarmKitBridge()` injected via `.environment(alarmKitBridge)`; `scheduleAll()` uses AlarmKit when authorized and clears notifications, else cancels stale alarms and falls back to notifications; additional `.task` loops over `alarmKitBridge.makeAuthorizationChangesStream()` to reschedule on auth changes |
+| Onboarding | `NotificationsStep` requests AlarmKit permission after notification permission on "Allow Notifications"; "Not now" skips both |
+| AlarmKit is not Plus-only | Free users get alarm-style alerts for their one allowed routine. Plus users get alarm-style alerts across unlimited routines. No `canUseAlarmAlerts` gate in `SubscriptionService`. No "Alarm-style alerts" row in `PlusView` |
+| Unit tests | 13 tests in `RoutineAlarmSchedulerTests.swift`: authorized/denied/notDetermined permission gating, disabled routine, cancel 7 IDs, cancelAll, stable and collision-free IDs, title content, polar no-event, rescheduleAll enabled/disabled mix, free-tier access confirmation |
+| Fallback | `RoutineNotificationScheduler` remains the fallback when AlarmKit is unavailable or not authorized |
+
+### What is intentionally not included in Stage 9
+
+- **Custom sounds:** `AlarmPresentation.Alert` uses system default audio.
+- **Snooze or secondary button:** `secondaryButton: nil`.
+- **Countdown UI or Live Activity customization.**
+- **Widgets:** WidgetKit is a future stage.
+- **Background rescheduling after alarm delivery.**
+- **Orphan alarm cleanup:** `rescheduleAll` cancels only provided routines. Callers cancel deleted routines explicitly with `cancel(routineID:)`.
+- **StoreKit changes:** No purchase flow modifications.
+
+---
+
 ## Upcoming Stages
 
 | Stage | Focus |
 |---|---|
-| 9 | Widgets + Travel Mode - WidgetKit extension, automatic location updates when traveling |
 | 10 | Polish + App Store Launch - StoreKit 2 purchase flow, accessibility, localization, App Store assets, review prompts |
 
