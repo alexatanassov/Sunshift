@@ -55,7 +55,7 @@ The lifestyle — for users who want Sunshift woven into their day.
 | 7-day light preview | See sunrise/sunset times for the week ahead |
 | Advanced light events | Astronomical/nautical/civil dawn and dusk |
 | Custom notification messages | Personalize the push notification copy per routine |
-| Widgets (if feasible by v1) | Home screen widget showing next sun event or active routine |
+| Widgets (post-v1) | Home screen widget showing next sun event or active routine |
 
 ---
 
@@ -296,7 +296,7 @@ The Today screen follows the app's design personality: warm, simple, premium, un
 
 - **Real routines** -- `NextRoutineCard` is a static placeholder. The full `LightRoutine` model and scheduling logic are Stage 4.
 - **Notifications** -- no `UNUserNotificationCenter` integration yet.
-- **Widgets** -- WidgetKit is Stage 9.
+- **Widgets** -- WidgetKit is post-v1.
 - **Paywall changes** -- no new Free vs Plus gates introduced. The existing tier model is unchanged.
 - **Live timer** -- the ViewModel does not self-update on a timer. The view must call `refresh()` externally to update countdowns.
 
@@ -534,8 +534,8 @@ After `hasCompletedOnboarding` is set:
 ### What Is Intentionally Not Included in Stage 5
 
 - **Notification scheduling:** `UNUserNotificationCenter` content and trigger scheduling are not in Stage 5. Permission is requested in onboarding, but no notifications fire until Stage 6. Implemented in Stage 6.
-- **AlarmKit integration:** Not in scope for v1.
-- **Widgets:** WidgetKit is post-Stage 5.
+- **AlarmKit integration:** Implemented in Stage 9.
+- **Widgets:** WidgetKit is post-v1.
 - **Full paywall purchase flow:** `SubscriptionService.isPlusUser` remains a manually toggled Bool. No StoreKit 2 purchase or restore flow.
 - **Advanced onboarding analytics:** No event tracking or funnel logging.
 
@@ -629,10 +629,10 @@ The prefix `sunshift.routine.<routineID>.` uniquely identifies all requests for 
 
 ### What is intentionally not included in Stage 6
 
-- **AlarmKit integration:** Not in scope for v1.
-- **Background rescheduling after delivery:** When a notification fires, the app does not automatically schedule a replacement. The next `rescheduleAll` call (on the next foreground launch or change event) replenishes the window. Background rescheduling via `UNUserNotificationCenterDelegate` or `BackgroundTasks` is post-Stage 6.
+- **AlarmKit integration:** Implemented in Stage 9.
+- **Background rescheduling after delivery:** When a notification fires, the app does not automatically schedule a replacement. The next `rescheduleAll` call (on the next foreground launch or change event) replenishes the window. Background rescheduling via `UNUserNotificationCenterDelegate` or `BackgroundTasks` is post-v1.
 - **`UNUserNotificationCenterDelegate` delivery handling:** No response handling, foreground presentation options, or action buttons are implemented.
-- **Widgets:** WidgetKit is post-Stage 6.
+- **Widgets:** WidgetKit is post-v1.
 - **StoreKit paywall purchase flow:** `SubscriptionService.isPlusUser` remains manually toggled.
 - **Notification status screen:** No in-app UI showing pending notification times or the upcoming routine delivery list.
 - **Advanced analytics:** No event tracking or delivery logging.
@@ -656,7 +656,7 @@ Stage 7 wires the entitlement foundation built in earlier stages into every affe
 | `canUseSavedLocations` | `Bool` | `isPlusUser`; used by future location expansion |
 | `canUseAdvancedEvents` | `Bool` | `isPlusUser`; gates blue hour, twilight, and first/last light anchors in `RoutineEditView`; implemented in Stage 8 |
 | `canUseCustomNotificationMessages` | `Bool` | `isPlusUser`; controls the notification message field in `RoutineEditView` |
-| `canUseWidgets` | `Bool` | `isPlusUser`; reserved for Stage 9 |
+| `canUseWidgets` | `Bool` | `isPlusUser`; reserved; post-v1 |
 | `canUse7DayPreview` | `Bool` | `isPlusUser`; gates `WeekPreviewView` on the Today screen; implemented in Stage 8 |
 | `canAddSavedLocation(currentNonCurrentCount:)` | `Bool` | Free: `count < FreeTierLimits.maxSavedLocations (1)`; Plus: always `true` |
 | `canUseTemplate(_:)` | `Bool` | `!template.requiresPlus || isPlusUser` |
@@ -759,10 +759,10 @@ Three gates are enforced when the editor opens:
 ### What is intentionally not included in Stage 7
 
 - **Real StoreKit purchases:** `purchase()` and `restorePurchases()` on `SubscriptionService` are stubs. `isPlusUser` is set via the debug toggle; StoreKit 2 entitlement checks replace this in a future stage.
-- **AlarmKit:** Not in scope for v1.
-- **Widgets:** WidgetKit is Stage 9.
+- **AlarmKit:** Implemented in Stage 9.
+- **Widgets:** WidgetKit is post-v1.
 - **Analytics:** No event tracking or paywall funnel logging.
-- **Full premium feature expansion:** `canUseWidgets` and `canUseSavedLocations` are defined as gates but their corresponding features (WidgetKit extension, saved location expansion) are built in later stages. `canUseAdvancedEvents` and `canUse7DayPreview` are wired in Stage 8.
+- **Full premium feature expansion:** `canUseWidgets` is defined as a gate but WidgetKit is post-v1. `canUseAdvancedEvents` and `canUse7DayPreview` are wired in Stage 8.
 
 ---
 
@@ -863,7 +863,7 @@ Plus users see all of `routineTriggerCases`, which adds `.blueHourStart`, `.blue
 
 - **Real StoreKit purchases:** `purchase()` and `restorePurchases()` are stubs. `isPlusUser` is set via the debug toggle.
 - **AlarmKit:** Implemented in Stage 9.
-- **Widgets:** WidgetKit is a future stage.
+- **Widgets:** WidgetKit is post-v1.
 - **Advanced weekly detail screen:** Tapping a `WeekPreviewRow` does not navigate to a detail view.
 - **Weather or UV data:** The weekly preview shows solar event times only.
 
@@ -959,11 +959,45 @@ An additional `.task` in `WindowGroup.body` loops over `alarmKitBridge.makeAutho
 
 ### Known Limitations in Stage 9
 
-- **Orphaned alarm cleanup:** `rescheduleAll` cancels only the routines in the provided array. Alarms for deleted routines persist until explicitly cancelled with `cancel(routineID:)`. The app does not currently call this on deletion.
+- **Orphaned alarm cleanup:** `rescheduleAll` cancels only the routines in the provided array. `cancel(routineID:)` must be called explicitly when a routine is deleted. Stage 10 wires this into the delete path via `AlarmKitBridge.cancel(routineID:)`.
 - **Custom sounds:** `secondaryButton: nil`; system default audio only.
 - **No snooze button.**
 - **No background rescheduling** after alarm delivery.
-- **No widgets.**
+- **No widgets:** WidgetKit is post-v1.
+
+---
+
+## Stage 10: V1 Polish and TestFlight Readiness
+
+Stage 10 closes the gaps identified at the end of Stage 9 and brings the app to a TestFlight-ready state.
+
+### AlarmKit delete-path cleanup
+
+`RoutinesView` calls `alarmKitBridge.cancel(routineID:)` when a routine is deleted. This prevents the orphaned alarm leak noted in Stage 9: previously, alarms for deleted routines persisted in `AlarmManager` until the next full `rescheduleAll` cycle. `AlarmKitBridge.cancel(routineID:)` cancels all 7 deterministic occurrence IDs derived from the routine's UUID.
+
+### PlusView purchase placeholder alert
+
+In release builds, tapping "Get Sunshift Plus" sets `showingPurchaseUnavailable = true`, which presents an `.alert` titled "In-App Purchases Coming Soon" with the message "Sunshift Plus is not available for purchase in this build yet." Previously the button was a no-op in release. The `#if DEBUG` path is unchanged: it sets `subscriptionService.isPlusUser = true` directly. "Restore Purchases" also shows the alert in release builds.
+
+### Advanced Light Events feature row
+
+`PlusView` feature list includes a new `PlusFeatureRow` for Advanced Light Events (icon `moon.haze.fill`, detail: "Blue hour, civil twilight, and first and last light as routine anchors."). This row documents the gate already enforced in `RoutineEditView` via `subscriptionService.canUseAdvancedEvents`.
+
+### PlusFeatureRow accessibility
+
+Each `PlusFeatureRow` carries `.accessibilityElement(children: .combine)` and `.accessibilityLabel("\(title). \(detail).")`. VoiceOver reads the row as a single element combining the icon, title, and detail text.
+
+### Onboarding alert copy
+
+`NotificationsStep` copy is revised to explain that the user may see both a notification prompt and an alarm prompt. The step heading and body are updated; the "Allow Notifications" button label remains unchanged.
+
+### Locked notification message field opens PlusView
+
+In `RoutineEditView`, the notification message `TextField` is disabled for free users. A transparent `Button` overlay covers the field so that tapping it sets `showingPlusForMessage = true` and presents `PlusView` as a sheet. Previously the tap was silently ignored.
+
+### Locations add button hidden at free limit
+
+In `LocationsView`, the "+" toolbar button is wrapped in an `if vm.canAddManualLocation` condition. Free users who have reached `FreeTierLimits.maxSavedLocations` no longer see the button at all. Previously the button remained visible but led to the upsell inline rather than the entry form.
 
 ---
 

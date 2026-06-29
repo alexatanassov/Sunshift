@@ -4,9 +4,9 @@ Alarms that move with the sun. Sunshift lets users build routines anchored to so
 
 ---
 
-## Current Stage: Stage 9 - AlarmKit Foundation
+## Current Stage: Stage 10 - V1 Polish and TestFlight Readiness
 
-Stage 9 adds AlarmKit as the primary alert delivery mechanism for all users. `AlarmPermissionService` tracks `AlarmManager.AuthorizationState` and requests authorization. `RoutineAlarmScheduler` schedules up to 7 deterministic alarm occurrences per routine using `.fixed(Date)` schedules and `SunshiftAlarmMetadata`. `AlarmKitBridge` centralizes all AlarmKit availability checks so the rest of the app requires no `@available` annotations. When AlarmKit is authorized, `SunshiftApp.scheduleAll()` uses alarms exclusively and cancels pending notifications; otherwise it falls back to `RoutineNotificationScheduler`. AlarmKit is not Plus-gated: free users receive alarm-style alerts for their one allowed routine.
+Stage 10 closes the gaps identified at the end of Stage 9 and brings the app to a TestFlight-ready state. AlarmKit orphan alarms are now cancelled on routine deletion via `AlarmKitBridge.cancel(routineID:)`. `PlusView` shows an "In-App Purchases Coming Soon" alert when the CTA is tapped in release builds instead of silently doing nothing; the debug toggle is unchanged. The Plus feature list now includes an Advanced Light Events row covering blue hour, civil twilight, and first and last light anchors. `PlusFeatureRow` groups each row into a single accessibility element with a combined label. Onboarding alert copy is revised to explain that the user may see both a notification prompt and an alarm prompt. Tapping the locked custom notification message field in `RoutineEditView` opens `PlusView` as a sheet for free users. The "+" toolbar button in `LocationsView` is hidden when the free saved-location limit is reached.
 
 ---
 
@@ -389,8 +389,8 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 |---|---|
 | `SubscriptionService` | `@Observable` final class; `tier: SubscriptionTier` (.free / .plus); `isPlusUser` computed property as the unified toggle; feature gates as computed `Bool` properties; `canAddSavedLocation(currentNonCurrentCount:)` and `canUseTemplate(_:)` as parameterized queries; `purchase()` and `restorePurchases()` stubbed for future StoreKit 2 |
 | `FreeTierLimits` | `maxActiveRoutines = 1`, `maxSavedLocations = 1`, `allowedTemplates = [.sunsetWalk, .custom]`, `previewDays = 0` |
-| Feature gates | `canCreateMoreThanOneRoutine`, `canUseAdvancedOffsets`, `canUseSavedLocations`, `canUseAdvancedEvents`, `canUseCustomNotificationMessages`; `canUseWidgets` and `canUse7DayPreview` defined as gates (`canUseAdvancedEvents` and `canUse7DayPreview` are wired in Stage 8; `canUseWidgets` is Stage 9) |
-| `PlusView` | Six `PlusFeatureRow` cards (unlimited routines, all templates, multiple saved locations, custom notifications, advanced timing, 7-day preview); `paywallHero` with "Get Sunshift Plus" CTA when `!isPlusUser`; `subscribedHero` confirmation state when `isPlusUser`; "Restore Purchases" button (stubbed); `#if DEBUG` developer section with "Simulate Plus" toggle |
+| Feature gates | `canCreateMoreThanOneRoutine`, `canUseAdvancedOffsets`, `canUseSavedLocations`, `canUseAdvancedEvents`, `canUseCustomNotificationMessages`; `canUseWidgets` and `canUse7DayPreview` defined as gates (`canUseAdvancedEvents` and `canUse7DayPreview` are wired in Stage 8; `canUseWidgets` is post-v1) |
+| `PlusView` | Seven `PlusFeatureRow` cards (unlimited routines, all templates, multiple saved locations, custom notifications, advanced timing, advanced light events, 7-day preview); `paywallHero` with "Get Sunshift Plus" CTA when `!isPlusUser`; `subscribedHero` confirmation state when `isPlusUser`; "Restore Purchases" button (stubbed); `#if DEBUG` developer section with "Simulate Plus" toggle |
 | Developer toggle | "Simulate Plus" toggle in the `#if DEBUG` developer section writes directly to `subscriptionService.isPlusUser`; all gated surfaces update reactively via `@Observable`; no persistence across app restarts |
 | Routines upsell | Tappable `freeLimitHint` card appears below the routine list when `isAtFreeLimit`; tapping opens `PlusView` as a sheet |
 | Locations upsell | `LocationPlusUpsell` shown in `LocationSavedSection` when `!vm.canAddManualLocation`; tapping opens `PlusView` as a sheet |
@@ -402,10 +402,10 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 ### What is intentionally not included in Stage 7
 
 - **Real StoreKit purchases:** `purchase()` and `restorePurchases()` are stubs. `isPlusUser` is set via the debug toggle and will later be driven by StoreKit 2 entitlement checks.
-- **AlarmKit:** Not in scope for v1.
-- **Widgets:** WidgetKit is Stage 9.
+- **AlarmKit:** Implemented in Stage 9.
+- **Widgets:** WidgetKit is post-v1.
 - **Analytics:** No event tracking or paywall funnel logging.
-- **Full premium feature expansion:** `canUseWidgets` and `canUseSavedLocations` are defined as gates but their corresponding surfaces (WidgetKit extension, saved location expansion beyond Stage 2) are built in later stages. `canUseAdvancedEvents` and `canUse7DayPreview` are wired in Stage 8.
+- **Full premium feature expansion:** `canUseWidgets` and `canUseSavedLocations` are defined as gates but WidgetKit is post-v1. `canUseAdvancedEvents` and `canUse7DayPreview` are wired in Stage 8.
 
 ---
 
@@ -429,11 +429,11 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 ### What is intentionally not included in Stage 8
 
 - **Real StoreKit purchases:** `purchase()` and `restorePurchases()` are stubs. `isPlusUser` is set via the debug toggle.
-- **AlarmKit:** Not in scope for v1.
-- **Widgets:** WidgetKit is Stage 9.
+- **AlarmKit:** Implemented in Stage 9.
+- **Widgets:** WidgetKit is post-v1.
 - **Advanced weekly detail screen:** Tapping a `WeekPreviewRow` does not navigate to a detail view.
 - **Weather or UV data:** The weekly preview shows solar event times only.
-- **Travel mode:** Automatic location updates when traveling are Stage 9.
+- **Travel mode:** Automatic location updates when traveling are post-v1.
 
 ---
 
@@ -458,16 +458,36 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 - **Custom sounds:** `AlarmPresentation.Alert` uses system default audio.
 - **Snooze or secondary button:** `secondaryButton: nil`.
 - **Countdown UI or Live Activity customization.**
-- **Widgets:** WidgetKit is a future stage.
+- **Widgets:** WidgetKit is post-v1.
 - **Background rescheduling after alarm delivery.**
-- **Orphan alarm cleanup:** `rescheduleAll` cancels only provided routines. Callers cancel deleted routines explicitly with `cancel(routineID:)`.
+- **Orphan alarm cleanup:** `rescheduleAll` cancels only provided routines. Stage 10 wires `AlarmKitBridge.cancel(routineID:)` into the routine delete path to clear orphaned alarms.
 - **StoreKit changes:** No purchase flow modifications.
 
 ---
 
-## Upcoming Stages
+## Implemented in Stage 10
 
-| Stage | Focus |
+| Area | What's in place |
 |---|---|
-| 10 | Polish + App Store Launch - StoreKit 2 purchase flow, accessibility, localization, App Store assets, review prompts |
+| AlarmKit delete-path cleanup | `RoutinesView` calls `alarmKitBridge.cancel(routineID:)` on routine deletion; orphaned alarms for deleted routines no longer persist |
+| PlusView purchase placeholder alert | Release builds show an "In-App Purchases Coming Soon" alert on "Get Sunshift Plus" tap; `showingPurchaseUnavailable` state drives the `.alert` modifier; the debug toggle is unchanged |
+| Advanced Light Events feature row | `PlusView` feature list includes a `PlusFeatureRow` for blue hour, civil twilight, and first and last light anchors (`moon.haze.fill` icon) |
+| PlusFeatureRow accessibility | `.accessibilityElement(children: .combine)` groups each row's icon, title, and detail into a single VoiceOver element; `.accessibilityLabel` provides the combined string |
+| Onboarding alert copy | Notification step copy revised to explain that the user may see both a notification prompt and an alarm prompt |
+| Locked notification message field | Transparent `Button` overlay on the disabled notification field in `RoutineEditView` opens `PlusView` as a sheet when tapped by free users |
+| Locations add button hidden at free limit | "+" toolbar button in `LocationsView` is rendered only when `vm.canAddManualLocation` is true; hidden when the free saved-location limit is reached |
+
+---
+
+## Upcoming: Launch Readiness and Post-V1
+
+Core v1 implementation is complete through Stage 10. Remaining work is launch preparation and post-v1 features.
+
+| Area | Notes |
+|---|---|
+| StoreKit 2 purchase flow | Replace `purchase()` and `restorePurchases()` stubs with real entitlement checks; launch blocker |
+| App Store launch prep | Screenshots, description, privacy manifest, and review prompt integration |
+| Widgets | WidgetKit home screen and lock screen extension; post-v1 |
+| Analytics | Paywall funnel logging and routine event tracking; post-v1 |
+| Background rescheduling | Reschedule alarms and notifications after delivery via BackgroundTasks; post-v1 |
 
