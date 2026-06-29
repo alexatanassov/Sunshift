@@ -32,12 +32,14 @@ struct LocationsView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingManualEntry = true
-                    } label: {
-                        Image(systemName: "plus")
+                    if vm.canAddManualLocation {
+                        Button {
+                            showingManualEntry = true
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .tint(SunshiftColors.sunsetAmber)
                     }
-                    .tint(SunshiftColors.sunsetAmber)
                 }
             }
             .sheet(isPresented: $showingManualEntry) {
