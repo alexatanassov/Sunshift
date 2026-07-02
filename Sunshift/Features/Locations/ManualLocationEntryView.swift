@@ -223,7 +223,7 @@ struct ManualLocationEntryView: View {
         guard formIsValid, let lat = latitudeValue, let lon = longitudeValue else { return }
 
         if !vm.canAddManualLocation {
-            saveError = "You have reached the free plan limit of 1 saved location. Upgrade to Sunshift Plus to save more."
+            saveError = "You have reached the free plan limit of 1 saved location. Upgrade to Helio Plus to save more."
             return
         }
 

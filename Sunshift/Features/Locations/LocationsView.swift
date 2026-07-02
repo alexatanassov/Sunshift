@@ -127,7 +127,7 @@ private struct LocationPermissionExplainCard: View {
                 .font(SunshiftTypography.caption())
                 .foregroundStyle(SunshiftColors.sunsetAmber)
 
-            Text("Sunshift uses your location to calculate sunrise, sunset, and light routines for where you are.")
+            Text("Helio uses your location to calculate sunrise, sunset, and light routines for where you are.")
                 .font(SunshiftTypography.body())
                 .foregroundStyle(SunshiftColors.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
@@ -166,7 +166,7 @@ private struct LocationPermissionDeniedCard: View {
         if vm.permissionStatus == .restricted {
             return "Location access is restricted on this device. Solar times will be shown for the San Diego fallback."
         }
-        return "Location access has been turned off. You can enable it in Settings to let Sunshift calculate sunrise and sunset times for where you are."
+        return "Location access has been turned off. You can enable it in Settings to let Helio calculate sunrise and sunset times for where you are."
     }
 
     var body: some View {
@@ -401,7 +401,7 @@ private struct LocationPlusUpsell: View {
             HStack(spacing: SunshiftSpacing.sm) {
                 Image(systemName: "sparkles")
                     .foregroundStyle(SunshiftColors.duskPurple)
-                Text("Save more places with Sunshift Plus.")
+                Text("Save more places with Helio Plus.")
                     .font(SunshiftTypography.body())
                     .foregroundStyle(SunshiftColors.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)

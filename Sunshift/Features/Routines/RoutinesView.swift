@@ -125,7 +125,7 @@ struct RoutinesView: View {
                         .font(SunshiftTypography.caption())
                         .fontWeight(.semibold)
                         .foregroundStyle(SunshiftColors.primaryText)
-                    Text("Sunshift Plus removes the limit.")
+                    Text("Helio Plus removes the limit.")
                         .font(SunshiftTypography.caption())
                         .foregroundStyle(SunshiftColors.secondaryText)
                 }

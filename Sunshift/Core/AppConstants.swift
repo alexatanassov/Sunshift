@@ -1,6 +1,6 @@
 import Foundation
 
 enum AppConstants {
-    static let appName = "Sunshift"
-    static let tagline = "Alarms that move with the sun"
+    static let appName = "Helio"
+    static let tagline = "Plan your day around the sun."
 }

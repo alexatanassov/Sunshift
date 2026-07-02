@@ -35,7 +35,7 @@ struct PlusView: View {
             .alert("In-App Purchases Coming Soon", isPresented: $showingPurchaseUnavailable) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("Sunshift Plus is not available for purchase in this build yet.")
+                Text("Helio Plus is not available for purchase in this build yet.")
             }
         }
         .background(SunshiftColors.softBackground)
@@ -45,12 +45,14 @@ struct PlusView: View {
 
     private var paywallHero: some View {
         VStack(spacing: SunshiftSpacing.sm) {
-            Image(systemName: "sun.horizon.fill")
-                .font(.system(size: 72))
-                .foregroundStyle(SunshiftGradients.dusk)
+            // TODO: Replace temp mascot with final transparent Helio mascot asset.
+            Image("helio-mascot-temp")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 96, height: 96)
 
             VStack(spacing: SunshiftSpacing.xs) {
-                Text("Sunshift Plus")
+                Text("Helio Plus")
                     .font(SunshiftTypography.display())
                     .foregroundStyle(SunshiftColors.primaryText)
 
@@ -70,7 +72,7 @@ struct PlusView: View {
                 .foregroundStyle(SunshiftColors.sunsetAmber)
 
             VStack(spacing: SunshiftSpacing.xs) {
-                Text("You have Sunshift Plus")
+                Text("You have Helio Plus")
                     .font(SunshiftTypography.display())
                     .foregroundStyle(SunshiftColors.primaryText)
                     .multilineTextAlignment(.center)
@@ -145,7 +147,7 @@ struct PlusView: View {
                 showingPurchaseUnavailable = true
                 #endif
             } label: {
-                Text("Get Sunshift Plus")
+                Text("Get Helio Plus")
                     .font(SunshiftTypography.headline())
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)

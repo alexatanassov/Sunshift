@@ -168,7 +168,7 @@ struct RoutineEditView: View {
                     Image(systemName: "lock.fill")
                         .font(.caption2)
                         .foregroundStyle(SunshiftColors.duskPurple)
-                    Text("\(hint.displayName) is part of Sunshift Plus.")
+                    Text("\(hint.displayName) is part of Helio Plus.")
                         .font(SunshiftTypography.caption())
                         .foregroundStyle(SunshiftColors.duskPurple)
                     Spacer()
@@ -223,7 +223,7 @@ struct RoutineEditView: View {
             Text("Timing")
         } footer: {
             if !subscriptionService.isPlusUser {
-                Text("More light events and timing options with Sunshift Plus.")
+                Text("More light events and timing options with Helio Plus.")
                     .foregroundStyle(SunshiftColors.duskPurple.opacity(0.8))
             }
         }
@@ -256,7 +256,7 @@ struct RoutineEditView: View {
             Text("Message")
         } footer: {
             if !subscriptionService.canUseCustomNotificationMessages {
-                Text("Custom messages are available with Sunshift Plus.")
+                Text("Custom messages are available with Helio Plus.")
                     .foregroundStyle(SunshiftColors.duskPurple.opacity(0.8))
             }
         }

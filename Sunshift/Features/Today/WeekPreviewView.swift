@@ -75,7 +75,7 @@ struct WeekPreviewView: View {
                         .font(SunshiftTypography.body())
                         .foregroundStyle(SunshiftColors.primaryText)
                         .multilineTextAlignment(.leading)
-                    Text("Available with Sunshift Plus.")
+                    Text("Available with Helio Plus.")
                         .font(SunshiftTypography.caption())
                         .foregroundStyle(SunshiftColors.secondaryText)
                 }

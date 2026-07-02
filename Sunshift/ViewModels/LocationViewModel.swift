@@ -116,7 +116,7 @@ final class LocationViewModel {
     @MainActor
     func saveManualLocation(_ location: SavedLocation) {
         guard canAddManualLocation else {
-            userFacingError = "You can save one home location on the free plan. Upgrade to Sunshift Plus to save more."
+            userFacingError = "You can save one home location on the free plan. Upgrade to Helio Plus to save more."
             return
         }
         store.add(location)

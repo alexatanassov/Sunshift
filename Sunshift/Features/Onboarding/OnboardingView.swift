@@ -80,16 +80,18 @@ private struct WelcomeStep: View {
             Spacer()
 
             VStack(spacing: SunshiftSpacing.xl) {
-                Image(systemName: "sun.horizon.fill")
-                    .font(.system(size: 96))
-                    .foregroundStyle(SunshiftGradients.dusk)
+                // TODO: Replace temp mascot with final transparent Helio mascot asset.
+                Image("helio-mascot-temp")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 120, height: 120)
 
                 VStack(spacing: SunshiftSpacing.sm) {
-                    Text("Sunshift")
+                    Text("Helio")
                         .font(SunshiftTypography.display(36))
                         .foregroundStyle(SunshiftColors.primaryText)
 
-                    Text("Routines that move with the sun, not the clock.")
+                    Text("Plan your day around the sun.")
                         .font(SunshiftTypography.body())
                         .foregroundStyle(SunshiftColors.secondaryText)
                         .multilineTextAlignment(.center)
@@ -248,7 +250,7 @@ private struct LocationStep: View {
                         .foregroundStyle(SunshiftColors.primaryText)
                         .multilineTextAlignment(.center)
 
-                    Text("Sunshift uses your location to calculate sunrise, sunset, and light-based routines.")
+                    Text("Helio uses your location to calculate sunrise, sunset, and light-based routines.")
                         .font(SunshiftTypography.body())
                         .foregroundStyle(SunshiftColors.secondaryText)
                         .multilineTextAlignment(.center)
@@ -416,7 +418,7 @@ private struct NotificationsStep: View {
                         .foregroundStyle(SunshiftColors.primaryText)
                         .multilineTextAlignment(.center)
 
-                    Text("Sunshift will let you know when your routine time arrives. On this device, you may see a prompt for notifications and one for alarms.")
+                    Text("Helio will let you know when your routine time arrives. On this device, you may see a prompt for notifications and one for alarms.")
                         .font(SunshiftTypography.body())
                         .foregroundStyle(SunshiftColors.secondaryText)
                         .multilineTextAlignment(.center)
@@ -611,7 +613,7 @@ private struct LockedTemplateBanner: View {
         HStack(spacing: SunshiftSpacing.sm) {
             Image(systemName: "sparkles")
                 .foregroundStyle(SunshiftColors.duskPurple)
-            Text("\(templateName) is part of Sunshift Plus.")
+            Text("\(templateName) is part of Helio Plus.")
                 .font(SunshiftTypography.caption())
                 .foregroundStyle(SunshiftColors.primaryText)
             Spacer()
