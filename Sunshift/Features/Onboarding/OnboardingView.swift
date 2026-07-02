@@ -38,7 +38,12 @@ struct OnboardingView: View {
                 onContinue: goForward
             )
         case .customize:
-            CustomizeStep(viewModel: viewModel, onBack: goBack, onContinue: goForward)
+            CustomizeStep(
+                viewModel: viewModel,
+                isPlusUser: subscriptionService.isPlusUser,
+                onBack: goBack,
+                onContinue: goForward
+            )
         case .location:
             LocationStep(onBack: goBack, onContinue: goForward)
         case .confirm:
@@ -164,12 +169,17 @@ private struct TemplatePickStep: View {
 
 private struct CustomizeStep: View {
     @Bindable var viewModel: OnboardingViewModel
+    let isPlusUser: Bool
     let onBack: () -> Void
     let onContinue: () -> Void
 
-    private let offsetPresets: [(label: String, minutes: Int)] = [
-        ("At", 0), ("15 min", 15), ("30 min", 30), ("1 hr", 60)
-    ]
+    private var offsetPresets: [(label: String, minutes: Int)] {
+        let free: [(label: String, minutes: Int)] = [
+            ("At", 0), ("15 min", 15), ("30 min", 30)
+        ]
+        guard isPlusUser else { return free }
+        return free + [("1 hr", 60)]
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -700,7 +710,7 @@ private struct OnboardingPrimaryButtonStyle: ButtonStyle {
 }
 
 #Preview("Customize") {
-    CustomizeStep(viewModel: OnboardingViewModel(), onBack: {}, onContinue: {})
+    CustomizeStep(viewModel: OnboardingViewModel(), isPlusUser: false, onBack: {}, onContinue: {})
 }
 
 #Preview("Location") {
