@@ -385,7 +385,7 @@ private struct NextRoutineCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SunshiftSpacing.sm) {
-            Text("Next routine")
+            Text("Upcoming")
                 .font(SunshiftTypography.caption())
                 .foregroundStyle(SunshiftColors.secondaryText)
                 .textCase(.uppercase)

@@ -304,7 +304,7 @@ The Today screen follows the app's design personality: warm, simple, premium, un
 
 ## Stage 4: Routine System
 
-Stage 4 implements the full routine lifecycle from model definition through persistence, scheduling, and UI. Routines are now real objects -- not placeholders -- and the Today screen Next Routine card reflects actual data.
+Stage 4 implements the full routine lifecycle from model definition through persistence, scheduling, and UI. Routines are now real objects -- not placeholders -- and the Today screen Upcoming routine card reflects actual data.
 
 ### Model: LightRoutine
 
