@@ -413,12 +413,12 @@ private struct NotificationsStep: View {
                     .foregroundStyle(SunshiftColors.duskPurple)
 
                 VStack(spacing: SunshiftSpacing.sm) {
-                    Text("Set up your alerts")
+                    Text("Turn on sun-based alerts")
                         .font(SunshiftTypography.display(26))
                         .foregroundStyle(SunshiftColors.primaryText)
                         .multilineTextAlignment(.center)
 
-                    Text("Helio will let you know when your routine time arrives. On this device, you may see a prompt for notifications and one for alarms.")
+                    Text("Helio works best when it can alert you at the right moment. You can skip this for now, but routines are most useful with notifications on.")
                         .font(SunshiftTypography.body())
                         .foregroundStyle(SunshiftColors.secondaryText)
                         .multilineTextAlignment(.center)

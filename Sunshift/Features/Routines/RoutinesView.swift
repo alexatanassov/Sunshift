@@ -4,6 +4,7 @@ struct RoutinesView: View {
     @Environment(RoutinesViewModel.self) private var viewModel
     @Environment(SubscriptionService.self) private var subscriptionService
     @Environment(AlarmKitBridge.self) private var alarmKitBridge
+    @Environment(NotificationPermissionService.self) private var notificationPermissionService
     @Environment(LocationViewModel.self) private var locationViewModel
     @State private var showingCreate = false
     @State private var editingRoutine: LightRoutine?
@@ -15,6 +16,12 @@ struct RoutinesView: View {
                 VStack(spacing: SunshiftSpacing.sm) {
                     upcomingRoutineCard
                         .padding(.bottom, SunshiftSpacing.xs)
+
+                    NotificationsNudgeCard(
+                        notificationPermissionService: notificationPermissionService,
+                        alarmKitBridge: alarmKitBridge
+                    )
+                    .padding(.bottom, SunshiftSpacing.xs)
 
                     if viewModel.routines.isEmpty {
                         emptyState
@@ -174,6 +181,67 @@ struct RoutinesView: View {
     }
 }
 
+// MARK: - Notifications Nudge
+
+private struct NotificationsNudgeCard: View {
+    let notificationPermissionService: NotificationPermissionService
+    let alarmKitBridge: AlarmKitBridge
+
+    @State private var isRequesting = false
+
+    private var nudgeState: NotificationNudgeState {
+        NotificationNudgeState(
+            notificationStatus: notificationPermissionService.authorizationStatus,
+            isAlarmKitAuthorized: alarmKitBridge.isAlarmKitAuthorized
+        )
+    }
+
+    var body: some View {
+        if nudgeState != .hidden {
+            VStack(alignment: .leading, spacing: SunshiftSpacing.sm) {
+                HStack(spacing: SunshiftSpacing.sm) {
+                    Image(systemName: "bell.badge.fill")
+                        .font(.body)
+                        .foregroundStyle(SunshiftColors.duskPurple)
+                    Text("Turn on alerts")
+                        .font(SunshiftTypography.headline())
+                        .foregroundStyle(SunshiftColors.primaryText)
+                    Spacer()
+                }
+
+                Text("Get notified when your next sun-based routine is ready.")
+                    .font(SunshiftTypography.body())
+                    .foregroundStyle(SunshiftColors.secondaryText)
+
+                if nudgeState == .deniedInSettings {
+                    Text("Alerts are turned off. Enable them in Settings to get notified.")
+                        .font(SunshiftTypography.caption())
+                        .foregroundStyle(SunshiftColors.secondaryText.opacity(0.75))
+                } else {
+                    Button(isRequesting ? "Requesting..." : "Enable Alerts") {
+                        isRequesting = true
+                        Task {
+                            await notificationPermissionService.requestPermission()
+                            await alarmKitBridge.requestAlarmPermission()
+                            isRequesting = false
+                        }
+                    }
+                    .font(SunshiftTypography.headline())
+                    .foregroundStyle(SunshiftColors.sunsetAmber)
+                    .disabled(isRequesting)
+                }
+            }
+            .padding(SunshiftSpacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                SunshiftColors.duskPurple.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium)
+            )
+            .transition(.opacity)
+        }
+    }
+}
+
 // MARK: - Routine Row
 
 private struct RoutineRow: View {
@@ -283,4 +351,6 @@ private struct RoutineRow: View {
         .environment(vm)
         .environment(sub)
         .environment(LocationViewModel(subscriptionService: sub))
+        .environment(AlarmKitBridge())
+        .environment(NotificationPermissionService())
 }
