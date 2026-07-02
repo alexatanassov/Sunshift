@@ -35,6 +35,7 @@ The magic — enough to hook the user and demonstrate the core value.
 | Today light timeline | Visual arc showing current sun position, remaining daylight |
 | Daylight remaining | Live countdown or display of minutes/hours left until sunset |
 | Sunrise / sunset / golden hour preview | Times shown for today |
+| 7-day light preview | See sunrise/sunset times for the week ahead. Moved from Plus to free/core; high-value discovery feature. |
 | One active routine | Tied to a single sun event with a fixed offset |
 | Sunset Walk template | Pre-built routine: 30 min before sunset |
 | Current location | Auto-detected via device GPS |
@@ -52,7 +53,6 @@ The lifestyle — for users who want Sunshift woven into their day.
 | All templates | Morning run, golden hour shoot, end-of-workday, etc. |
 | Custom offsets | +/- minutes or hours relative to any sun event |
 | Saved locations | Set routines for home, office, a recurring travel destination |
-| 7-day light preview | See sunrise/sunset times for the week ahead |
 | Advanced light events | Astronomical/nautical/civil dawn and dusk |
 | Custom notification messages | Personalize the push notification copy per routine |
 | Widgets (post-v1) | Home screen widget showing next sun event or active routine |
@@ -657,7 +657,7 @@ Stage 7 wires the entitlement foundation built in earlier stages into every affe
 | `canUseAdvancedEvents` | `Bool` | `isPlusUser`; gates blue hour, twilight, and first/last light anchors in `RoutineEditView`; implemented in Stage 8 |
 | `canUseCustomNotificationMessages` | `Bool` | `isPlusUser`; controls the notification message field in `RoutineEditView` |
 | `canUseWidgets` | `Bool` | `isPlusUser`; reserved; post-v1 |
-| `canUse7DayPreview` | `Bool` | `isPlusUser`; gates `WeekPreviewView` on the Today screen; implemented in Stage 8 |
+| `canUse7DayPreview` | `Bool` | Always `true`; 7-day preview moved to a core free feature in Stage 10 |
 | `canAddSavedLocation(currentNonCurrentCount:)` | `Bool` | Free: `count < FreeTierLimits.maxSavedLocations (1)`; Plus: always `true` |
 | `canUseTemplate(_:)` | `Bool` | `!template.requiresPlus || isPlusUser` |
 | `purchase()` | `async throws` | StoreKit 2 stub |
@@ -672,7 +672,7 @@ Static enum in `SubscriptionTier.swift`:
 | `maxActiveRoutines` | `1` | Free users are blocked from creating a second routine |
 | `maxSavedLocations` | `1` | Free users can save one non-current location |
 | `allowedTemplates` | `[.sunsetWalk, .custom]` | Plus badges and locks applied to all other templates |
-| `previewDays` | `0` | Reserved for the 7-day preview gate |
+| `previewDays` | `7` | Free users get the 7-day light preview |
 
 ### Templates by tier
 
@@ -688,7 +688,7 @@ Static enum in `SubscriptionTier.swift`:
 
 `PlusView` is a `NavigationStack`-wrapped scroll screen presented on the fourth tab.
 
-**Non-subscriber state:** `paywallHero` with a `sun.horizon.fill` icon and the "Build your whole day around the light." tagline; six `PlusFeatureRow` cards listing unlimited routines, all templates, multiple saved locations, custom notifications, advanced timing, and 7-day preview; a "Get Sunshift Plus" button (in release: calls `subscriptionService.purchase()`; in debug: sets `isPlusUser = true` directly); a "Restore Purchases" button (calls `subscriptionService.restorePurchases()`; stubbed).
+**Non-subscriber state:** `paywallHero` with a `sun.horizon.fill` icon and the "Build your whole day around the light." tagline; six `PlusFeatureRow` cards listing unlimited routines, all templates, multiple saved locations, custom notifications, advanced timing, and advanced light events; a "Get Sunshift Plus" button (in release: calls `subscriptionService.purchase()`; in debug: sets `isPlusUser = true` directly); a "Restore Purchases" button (calls `subscriptionService.restorePurchases()`; stubbed).
 
 **Subscribed state:** `subscribedHero` with a `checkmark.circle.fill` icon and "All features are unlocked." copy; the same feature list; CTA section hidden.
 
@@ -800,11 +800,7 @@ The result is assigned to `weekPreview: [DayPreview]`, exposed as a `private(set
 
 ### WeekPreviewView
 
-`WeekPreviewView` (`Sunshift/Features/Today/WeekPreviewView.swift`) is embedded in the `TodayView` content stack between `EventsSection` and `NextRoutineCard`. It reads `subscriptionService.canUse7DayPreview` from `@Environment` and branches:
-
-**Plus (unlocked):** Shows up to 7 `WeekPreviewRow` entries from `viewModel.weekPreview.prefix(7)`. If `weekPreview` is empty, shows "Weekly light data is unavailable for this location."
-
-**Free (locked):** A `Button` row with a `sparkles` icon, copy "Sunrise and sunset for the next 7 days. Available with Sunshift Plus.", and a `lock.fill` icon. Tapping sets `showingPlus = true`, which presents `PlusView` as a `.sheet`.
+`WeekPreviewView` (`Sunshift/Features/Today/WeekPreviewView.swift`) is embedded in the `TodayView` content stack between `EventsSection` and `NextRoutineCard`. As of Stage 10, it's a core free feature with no gate: it always shows up to 7 `WeekPreviewRow` entries from `viewModel.weekPreview.prefix(7)`. If `weekPreview` is empty, it shows "Weekly light data is unavailable for this location."
 
 ### WeekPreviewRow
 
@@ -998,6 +994,10 @@ In `RoutineEditView`, the notification message `TextField` is disabled for free 
 ### Locations add button hidden at free limit
 
 In `LocationsView`, the "+" toolbar button is wrapped in an `if vm.canAddManualLocation` condition. Free users who have reached `FreeTierLimits.maxSavedLocations` no longer see the button at all. Previously the button remained visible but led to the upsell inline rather than the entry form.
+
+### 7-day light preview moved to free
+
+`canUse7DayPreview` now returns `true` unconditionally, and `FreeTierLimits.previewDays` is `7`. `WeekPreviewView` no longer has a locked state or a `SubscriptionService` dependency; it always renders the 7-day card. `PlusView` no longer lists 7-Day Light Preview as a feature. Moved to free/core because it's a high-value discovery feature.
 
 ---
 

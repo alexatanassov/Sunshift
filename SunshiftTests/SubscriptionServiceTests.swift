@@ -119,6 +119,19 @@ struct SubscriptionServiceTests {
         #expect(svc.canCreateMoreThanOneRoutine)
     }
 
+    // MARK: - 7-day preview gate
+
+    @Test func canUse7DayPreview_freeUserAllowed() {
+        let svc = SubscriptionService()
+        #expect(svc.canUse7DayPreview)
+    }
+
+    @Test func canUse7DayPreview_plusUserAllowed() {
+        let svc = SubscriptionService()
+        svc.isPlusUser = true
+        #expect(svc.canUse7DayPreview)
+    }
+
     // MARK: - Advanced events gate
 
     @Test func canUseAdvancedEvents_freeUserBlocked() {

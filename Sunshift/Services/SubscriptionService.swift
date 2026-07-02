@@ -38,8 +38,8 @@ final class SubscriptionService {
     // Whether the user may use WidgetKit home screen widgets (post-Stage 9).
     var canUseWidgets: Bool { isPlusUser }
 
-    // Whether the user may view the 7-day solar preview (post-Stage 8).
-    var canUse7DayPreview: Bool { isPlusUser }
+    // 7-day light preview is now a core free feature; available to all users.
+    var canUse7DayPreview: Bool { true }
 
     // Whether the user may save an additional non-current location.
     // Pass the current count of non-current saved locations.

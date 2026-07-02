@@ -126,12 +126,6 @@ struct PlusView: View {
                 title: "Advanced Light Events",
                 detail: "Blue hour, civil twilight, and first and last light as routine anchors."
             )
-            PlusFeatureRow(
-                icon: "calendar",
-                color: SunshiftColors.duskPurple,
-                title: "7-Day Light Preview",
-                detail: "See sunrise and sunset times for the week ahead."
-            )
         }
         .padding(.horizontal, SunshiftSpacing.md)
     }

@@ -112,7 +112,7 @@ Sunshift/
 │   ├── Today/
 │   │   ├── TodayView.swift              # Main Today tab; routes between empty, loading, error, and content states
 │   │   ├── TodayTimelineView.swift      # Horizontal day timeline bar with gradient and now-indicator dot
-│   │   └── WeekPreviewView.swift        # Plus-gated 7-day light preview card; free users see a locked upsell row
+│   │   └── WeekPreviewView.swift        # 7-day light preview card; free core feature, always shown
 │   ├── Routines/
 │   │   ├── RoutinesView.swift           # Routine list: rows with enable toggle, create/edit sheet entry points
 │   │   └── RoutineEditView.swift        # Create/edit sheet: name, template picker, timing, weekday chips, delete
@@ -388,9 +388,9 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 | Area | What's in place |
 |---|---|
 | `SubscriptionService` | `@Observable` final class; `tier: SubscriptionTier` (.free / .plus); `isPlusUser` computed property as the unified toggle; feature gates as computed `Bool` properties; `canAddSavedLocation(currentNonCurrentCount:)` and `canUseTemplate(_:)` as parameterized queries; `purchase()` and `restorePurchases()` stubbed for future StoreKit 2 |
-| `FreeTierLimits` | `maxActiveRoutines = 1`, `maxSavedLocations = 1`, `allowedTemplates = [.sunsetWalk, .custom]`, `previewDays = 0` |
-| Feature gates | `canCreateMoreThanOneRoutine`, `canUseAdvancedOffsets`, `canUseSavedLocations`, `canUseAdvancedEvents`, `canUseCustomNotificationMessages`; `canUseWidgets` and `canUse7DayPreview` defined as gates (`canUseAdvancedEvents` and `canUse7DayPreview` are wired in Stage 8; `canUseWidgets` is post-v1) |
-| `PlusView` | Seven `PlusFeatureRow` cards (unlimited routines, all templates, multiple saved locations, custom notifications, advanced timing, advanced light events, 7-day preview); `paywallHero` with "Get Sunshift Plus" CTA when `!isPlusUser`; `subscribedHero` confirmation state when `isPlusUser`; "Restore Purchases" button (stubbed); `#if DEBUG` developer section with "Simulate Plus" toggle |
+| `FreeTierLimits` | `maxActiveRoutines = 1`, `maxSavedLocations = 1`, `allowedTemplates = [.sunsetWalk, .custom]`, `previewDays = 7` (free users get the 7-day light preview) |
+| Feature gates | `canCreateMoreThanOneRoutine`, `canUseAdvancedOffsets`, `canUseSavedLocations`, `canUseAdvancedEvents`, `canUseCustomNotificationMessages`; `canUseWidgets` defined as a gate (post-v1); `canUse7DayPreview` returns `true` for all users, 7-day preview is a core free feature |
+| `PlusView` | Six `PlusFeatureRow` cards (unlimited routines, all templates, multiple saved locations, custom notifications, advanced timing, advanced light events); `paywallHero` with "Get Sunshift Plus" CTA when `!isPlusUser`; `subscribedHero` confirmation state when `isPlusUser`; "Restore Purchases" button (stubbed); `#if DEBUG` developer section with "Simulate Plus" toggle |
 | Developer toggle | "Simulate Plus" toggle in the `#if DEBUG` developer section writes directly to `subscriptionService.isPlusUser`; all gated surfaces update reactively via `@Observable`; no persistence across app restarts |
 | Routines upsell | Tappable `freeLimitHint` card appears below the routine list when `isAtFreeLimit`; tapping opens `PlusView` as a sheet |
 | Locations upsell | `LocationPlusUpsell` shown in `LocationSavedSection` when `!vm.canAddManualLocation`; tapping opens `PlusView` as a sheet |
@@ -405,7 +405,7 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 - **AlarmKit:** Implemented in Stage 9.
 - **Widgets:** WidgetKit is post-v1.
 - **Analytics:** No event tracking or paywall funnel logging.
-- **Full premium feature expansion:** `canUseWidgets` and `canUseSavedLocations` are defined as gates but WidgetKit is post-v1. `canUseAdvancedEvents` and `canUse7DayPreview` are wired in Stage 8.
+- **Full premium feature expansion:** `canUseWidgets` and `canUseSavedLocations` are defined as gates but WidgetKit is post-v1. `canUseAdvancedEvents` is wired in Stage 8. `canUse7DayPreview` moved to a core free feature.
 
 ---
 
@@ -416,9 +416,8 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 | `DayPreview` model | `Identifiable`, `Equatable` value type; fields: `id`, `date`, `timeZoneIdentifier`, `sunrise`, `sunset`, `goldenHourStart`, `goldenHourEnd`, `lastLight`, `daylightDuration`; all event fields are `Date?` to represent polar and nil-event conditions |
 | `TodayViewModel` week generation | `computeWeekPreview(location:tz:cal:now:)` iterates day offsets 0-6 from `now`; extracts `startOfDay` in the location's timezone; calls `SunService.sunSchedule(for:)` and skips days that throw; populates `weekPreview: [DayPreview]`; `clearScheduleState()` resets `weekPreview = []` on error |
 | 7-day rolling preview | Starts at today's local calendar date in the active location's timezone; covers 7 consecutive days; days where `SunService` throws are silently omitted |
-| `WeekPreviewView` | Plus-gated card added to the Today content stack between `EventsSection` and `NextRoutineCard`; reads `subscriptionService.canUse7DayPreview`; Plus branch renders `WeekPreviewRow` for each of up to 7 days; free branch renders a tappable locked row |
-| Free locked state | Locked row is a `Button` that opens `PlusView` as a `.sheet`; copy: "Sunrise and sunset for the next 7 days. Available with Sunshift Plus."; `lock.fill` icon at trailing edge |
-| Plus weekly rows | Each `WeekPreviewRow` shows abbreviated weekday + day number, sunrise time with `sunrise.fill` icon, sunset time with `sunset.fill` icon, and total daylight duration; all columns use monospaced digits |
+| `WeekPreviewView` | Free core card added to the Today content stack between `EventsSection` and `NextRoutineCard`; always renders `WeekPreviewRow` for each of up to 7 days (moved off the Plus gate; see Stage 10) |
+| Weekly rows | Each `WeekPreviewRow` shows abbreviated weekday + day number, sunrise time with `sunrise.fill` icon, sunset time with `sunset.fill` icon, and total daylight duration; all columns use monospaced digits |
 | Timezone-aware formatting | `WeekPreviewRow` resolves `TimeZone(identifier: preview.timeZoneIdentifier) ?? .current`; all `DateFormatter` instances and `Date.formattedTime(in:)` calls use the location's timezone, not the device timezone |
 | Polar / nil event fallback | When `sunrise` or `sunset` is `nil` on a `DayPreview` entry, the row renders "--" for that column; no separate polar label is shown in the weekly view |
 | `SunEventType.basicRoutineTriggerCases` | New static property on `SunEventType`; returns `[.sunrise, .sunset, .solarNoon, .goldenHourStart, .goldenHourEnd]`; the five events available to free users in the routine editor |
@@ -476,6 +475,7 @@ Sunshift uses your location to calculate sunrise, sunset, and light-based routin
 | Onboarding alert copy | Notification step copy revised to explain that the user may see both a notification prompt and an alarm prompt |
 | Locked notification message field | Transparent `Button` overlay on the disabled notification field in `RoutineEditView` opens `PlusView` as a sheet when tapped by free users |
 | Locations add button hidden at free limit | "+" toolbar button in `LocationsView` is rendered only when `vm.canAddManualLocation` is true; hidden when the free saved-location limit is reached |
+| 7-day light preview moved to free | `canUse7DayPreview` now returns `true` for all users; `WeekPreviewView` always renders the 7-day card with no locked state; `PlusView` no longer lists it as a Plus feature. Moved to free/core because it's a high-value discovery feature. |
 
 ---
 

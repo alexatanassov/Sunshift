@@ -2,8 +2,6 @@ import SwiftUI
 
 struct WeekPreviewView: View {
     let viewModel: TodayViewModel
-    @Environment(SubscriptionService.self) private var subscriptionService
-    @State private var showingPlus = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -14,24 +12,16 @@ struct WeekPreviewView: View {
                 .padding(.top, SunshiftSpacing.md)
                 .padding(.bottom, SunshiftSpacing.sm)
 
-            if subscriptionService.canUse7DayPreview {
-                plusContent
-            } else {
-                lockedContent
-            }
+            content
         }
         .background(SunshiftColors.cardBackground, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
         .cardShadow()
-        .sheet(isPresented: $showingPlus) {
-            PlusView()
-                .environment(subscriptionService)
-        }
     }
 
-    // MARK: - Plus content
+    // MARK: - Content
 
     @ViewBuilder
-    private var plusContent: some View {
+    private var content: some View {
         if viewModel.weekPreview.isEmpty {
             Text("Weekly light data is unavailable for this location.")
                 .font(SunshiftTypography.caption())
@@ -56,40 +46,6 @@ struct WeekPreviewView: View {
                 WeekPreviewRow(preview: preview)
             }
         }
-    }
-
-    // MARK: - Locked content
-
-    private var lockedContent: some View {
-        Button {
-            showingPlus = true
-        } label: {
-            HStack(spacing: SunshiftSpacing.md) {
-                Image(systemName: "sparkles")
-                    .font(.title2)
-                    .foregroundStyle(SunshiftColors.sunsetAmber)
-                    .frame(width: 28)
-
-                VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
-                    Text("Sunrise and sunset for the next 7 days.")
-                        .font(SunshiftTypography.body())
-                        .foregroundStyle(SunshiftColors.primaryText)
-                        .multilineTextAlignment(.leading)
-                    Text("Available with Helio Plus.")
-                        .font(SunshiftTypography.caption())
-                        .foregroundStyle(SunshiftColors.secondaryText)
-                }
-
-                Spacer()
-
-                Image(systemName: "lock.fill")
-                    .font(.caption)
-                    .foregroundStyle(SunshiftColors.secondaryText.opacity(0.55))
-            }
-            .padding(.horizontal, SunshiftSpacing.md)
-            .padding(.bottom, SunshiftSpacing.md)
-        }
-        .buttonStyle(.plain)
     }
 }
 
@@ -193,18 +149,8 @@ private struct WeekPreviewRow: View {
 
 // MARK: - Previews
 
-#Preview("Free") {
+#Preview("Empty") {
     WeekPreviewView(viewModel: TodayViewModel())
-        .environment(SubscriptionService())
-        .padding()
-        .background(SunshiftColors.softBackground)
-}
-
-#Preview("Plus (empty)") {
-    let svc = SubscriptionService()
-    svc.isPlusUser = true
-    return WeekPreviewView(viewModel: TodayViewModel())
-        .environment(svc)
         .padding()
         .background(SunshiftColors.softBackground)
 }

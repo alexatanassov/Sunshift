@@ -75,6 +75,7 @@ enum RoutineTemplate: String, CaseIterable, Identifiable, Codable {
 enum FreeTierLimits {
     static let maxActiveRoutines = 1
     static let allowedTemplates: [RoutineTemplate] = [.sunsetWalk, .custom]
-    static let previewDays = 0
+    // Free users get the 7-day light preview.
+    static let previewDays = 7
     static let maxSavedLocations = 1
 }
