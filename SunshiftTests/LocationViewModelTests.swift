@@ -133,6 +133,31 @@ struct LocationViewModelTests {
         #expect(vm.activeLocation == nil)
     }
 
+    // MARK: reverseGeocodedLocation
+
+    @Test func reverseGeocodedLocation_withSuccess_returnsGeocodedLocation() async {
+        let geocoder = MockGeocodingService()
+        geocoder.geocodedResult = GeocodedLocation(
+            latitude: 48.8566, longitude: 2.3522,
+            city: "Paris", state: nil, country: "France",
+            isoCountryCode: "FR", timeZoneIdentifier: "Europe/Paris"
+        )
+        let (vm, _, _) = makeVM(geocodingService: geocoder)
+
+        let result = await vm.reverseGeocodedLocation(latitude: 48.8566, longitude: 2.3522)
+        #expect(result?.locationName == "Paris")
+        #expect(result?.timeZoneIdentifier == "Europe/Paris")
+    }
+
+    @Test func reverseGeocodedLocation_whenGeocodingFails_returnsNil() async {
+        let geocoder = MockGeocodingService()
+        geocoder.errorToThrow = GeocodingError.noResultsFound
+        let (vm, _, _) = makeVM(geocodingService: geocoder)
+
+        let result = await vm.reverseGeocodedLocation(latitude: 0, longitude: 0)
+        #expect(result == nil)
+    }
+
     // MARK: saveManualLocation
 
     @Test func saveManualLocation_underFreeTierLimit_savesAndActivates() {

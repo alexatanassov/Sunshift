@@ -131,6 +131,13 @@ final class LocationViewModel {
         syncFromStore()
     }
 
+    /// Resolves a display name and timezone for a coordinate picked on the map.
+    /// Returns nil if geocoding fails; callers should leave their fields as-is in that case.
+    @MainActor
+    func reverseGeocodedLocation(latitude: Double, longitude: Double) async -> GeocodedLocation? {
+        try? await geocodingService.reverseGeocode(latitude: latitude, longitude: longitude)
+    }
+
     // MARK: - Private helpers
 
     private var isAuthorized: Bool {

@@ -1,4 +1,6 @@
 import SwiftUI
+import MapKit
+import CoreLocation
 
 struct ManualLocationEntryView: View {
     @Environment(LocationViewModel.self) private var vm
@@ -10,11 +12,25 @@ struct ManualLocationEntryView: View {
     @State private var timezoneText = ""
     @State private var saveError: String?
 
+    @State private var cameraPosition = MapCameraPosition.region(
+        MKCoordinateRegion(
+            center: CLLocationCoordinate2D(
+                latitude: SavedLocation.devFallback.latitude,
+                longitude: SavedLocation.devFallback.longitude
+            ),
+            span: MKCoordinateSpan(latitudeDelta: 4, longitudeDelta: 4)
+        )
+    )
+    @State private var isResolvingName = false
+    @State private var didSetInitialRegion = false
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: SunshiftSpacing.lg) {
-                    formCard
+                    nameCard
+                    mapCard
+                    advancedCoordinatesCard
                     if let error = saveError {
                         saveErrorBanner(error)
                     }
@@ -37,40 +53,24 @@ struct ManualLocationEntryView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .onAppear { setInitialRegionIfNeeded() }
         }
     }
 
-    // MARK: - Form Card
+    // MARK: - Name Card
 
-    private var formCard: some View {
+    private var nameCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             fieldRow(label: "Location Name") {
-                TextField("San Diego", text: $name)
-                    .font(SunshiftTypography.body())
-                    .foregroundStyle(SunshiftColors.primaryText)
-                    .textInputAutocapitalization(.words)
-            }
-
-            Divider().padding(.horizontal, SunshiftSpacing.md)
-
-            fieldRow(label: "Latitude", errorMessage: latitudeError) {
-                TextField("32.7157", text: $latitudeText)
-                    .font(SunshiftTypography.body())
-                    .foregroundStyle(SunshiftColors.primaryText)
-                    .keyboardType(.numbersAndPunctuation)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-            }
-
-            Divider().padding(.horizontal, SunshiftSpacing.md)
-
-            fieldRow(label: "Longitude", errorMessage: longitudeError) {
-                TextField("-117.1611", text: $longitudeText)
-                    .font(SunshiftTypography.body())
-                    .foregroundStyle(SunshiftColors.primaryText)
-                    .keyboardType(.numbersAndPunctuation)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
+                HStack(spacing: SunshiftSpacing.xs) {
+                    TextField("San Diego", text: $name)
+                        .font(SunshiftTypography.body())
+                        .foregroundStyle(SunshiftColors.primaryText)
+                        .textInputAutocapitalization(.words)
+                    if isResolvingName {
+                        ProgressView()
+                    }
+                }
             }
 
             Divider().padding(.horizontal, SunshiftSpacing.md)
@@ -85,6 +85,76 @@ struct ManualLocationEntryView: View {
         }
         .background(SunshiftColors.cardBackground, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
         .cardShadow()
+    }
+
+    // MARK: - Map Card
+
+    private var mapCard: some View {
+        VStack(alignment: .leading, spacing: SunshiftSpacing.sm) {
+            Text("Tap the map to choose a location")
+                .font(SunshiftTypography.caption())
+                .foregroundStyle(SunshiftColors.secondaryText)
+                .padding(.horizontal, SunshiftSpacing.md)
+                .padding(.top, SunshiftSpacing.md)
+
+            MapReader { proxy in
+                Map(position: $cameraPosition) {
+                    if let coordinate = selectedCoordinate {
+                        Marker(name.isEmpty ? "Selected Location" : name, coordinate: coordinate)
+                            .tint(SunshiftColors.sunsetAmber)
+                    }
+                }
+                .mapStyle(.standard(pointsOfInterest: .excludingAll))
+                .onTapGesture { point in
+                    guard let coordinate = proxy.convert(point, from: .local) else { return }
+                    applyPickedCoordinate(coordinate)
+                }
+            }
+            .frame(height: 220)
+            .clipShape(RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
+            .padding(.horizontal, SunshiftSpacing.md)
+            .padding(.bottom, SunshiftSpacing.md)
+        }
+        .background(SunshiftColors.cardBackground, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
+        .cardShadow()
+    }
+
+    // MARK: - Advanced Coordinates Card
+
+    private var advancedCoordinatesCard: some View {
+        DisclosureGroup("Advanced: Manual Coordinates") {
+            VStack(alignment: .leading, spacing: 0) {
+                Divider().padding(.horizontal, SunshiftSpacing.md)
+
+                fieldRow(label: "Latitude", errorMessage: latitudeError) {
+                    TextField("32.7157", text: $latitudeText)
+                        .font(SunshiftTypography.body())
+                        .foregroundStyle(SunshiftColors.primaryText)
+                        .keyboardType(.numbersAndPunctuation)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                }
+
+                Divider().padding(.horizontal, SunshiftSpacing.md)
+
+                fieldRow(label: "Longitude", errorMessage: longitudeError) {
+                    TextField("-117.1611", text: $longitudeText)
+                        .font(SunshiftTypography.body())
+                        .foregroundStyle(SunshiftColors.primaryText)
+                        .keyboardType(.numbersAndPunctuation)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                }
+            }
+        }
+        .font(SunshiftTypography.body())
+        .foregroundStyle(SunshiftColors.primaryText)
+        .tint(SunshiftColors.sunsetAmber)
+        .padding(SunshiftSpacing.md)
+        .background(SunshiftColors.cardBackground, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
+        .cardShadow()
+        .onChange(of: latitudeText) { recenterMapIfCoordinateValid() }
+        .onChange(of: longitudeText) { recenterMapIfCoordinateValid() }
     }
 
     @ViewBuilder
@@ -214,6 +284,64 @@ struct ManualLocationEntryView: View {
     private var timezoneError: String? {
         guard !trimmedTimezone.isEmpty, !timezoneIsValid else { return nil }
         return "Not a recognized timezone identifier"
+    }
+
+    // MARK: - Map Picker
+
+    /// Coordinate for the map pin, driven directly by the latitude/longitude fields
+    /// so the map and the manual fields always agree with each other.
+    private var selectedCoordinate: CLLocationCoordinate2D? {
+        guard latitudeIsValid, longitudeIsValid, let lat = latitudeValue, let lon = longitudeValue else {
+            return nil
+        }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+
+    private func setInitialRegionIfNeeded() {
+        guard !didSetInitialRegion else { return }
+        didSetInitialRegion = true
+        let location = vm.resolvedLocation
+        cameraPosition = .region(
+            MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: location.latitude, longitude: location.longitude),
+                span: MKCoordinateSpan(latitudeDelta: 4, longitudeDelta: 4)
+            )
+        )
+    }
+
+    private func applyPickedCoordinate(_ coordinate: CLLocationCoordinate2D) {
+        latitudeText = String(format: "%.4f", coordinate.latitude)
+        longitudeText = String(format: "%.4f", coordinate.longitude)
+        saveError = nil
+        if trimmedName.isEmpty || trimmedTimezone.isEmpty {
+            Task { await resolveNameIfNeeded(coordinate) }
+        }
+    }
+
+    private func recenterMapIfCoordinateValid() {
+        guard let coordinate = selectedCoordinate else { return }
+        withAnimation {
+            cameraPosition = .region(
+                MKCoordinateRegion(center: coordinate, span: MKCoordinateSpan(latitudeDelta: 4, longitudeDelta: 4))
+            )
+        }
+    }
+
+    @MainActor
+    private func resolveNameIfNeeded(_ coordinate: CLLocationCoordinate2D) async {
+        isResolvingName = true
+        defer { isResolvingName = false }
+        guard let geocoded = await vm.reverseGeocodedLocation(
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude
+        ) else { return }
+
+        if trimmedName.isEmpty {
+            name = geocoded.locationName
+        }
+        if trimmedTimezone.isEmpty {
+            timezoneText = geocoded.timeZoneIdentifier
+        }
     }
 
     // MARK: - Save
