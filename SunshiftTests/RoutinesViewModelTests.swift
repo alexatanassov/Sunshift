@@ -244,6 +244,58 @@ struct RoutinesViewModelTests {
         #expect(vm.routines[0].title == "Fresh Start")
     }
 
+    // MARK: - Upcoming routine preview
+
+    private func makeSFLocation() -> SavedLocation {
+        SavedLocation(
+            name: "San Francisco",
+            subtitle: "San Francisco, CA",
+            latitude: 37.7749,
+            longitude: -122.4194,
+            timeZoneIdentifier: "America/Los_Angeles",
+            source: .manual,
+            isCurrentLocation: false
+        )
+    }
+
+    private func makeNoon(year: Int = 2026, month: Int = 6, day: Int = 23) throws -> Date {
+        let tz = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = tz
+        var dc = DateComponents()
+        dc.year = year; dc.month = month; dc.day = day; dc.hour = 12
+        return try #require(cal.date(from: dc))
+    }
+
+    @Test func upcomingRoutinePreviewNilWhenNoRoutines() throws {
+        let vm = makeViewModel()
+        let now = try makeNoon()
+        #expect(vm.upcomingRoutinePreview(location: makeSFLocation(), now: now) == nil)
+    }
+
+    @Test func upcomingRoutinePreviewNilWhenAllRoutinesDisabled() throws {
+        let (vm, _) = makeViewModelAndStore()
+        let routine = LightRoutine(title: "Sunset Walk", sunEventType: .sunset, offsetMinutes: 30, isBeforeEvent: true, isEnabled: false)
+        vm.addRoutine(routine)
+        let now = try makeNoon()
+        #expect(vm.upcomingRoutinePreview(location: makeSFLocation(), now: now) == nil)
+    }
+
+    @Test func upcomingRoutinePreviewReturnsSoonestRoutine() throws {
+        let (vm, _) = makeViewModelAndStore(isPlusUser: true)
+        // Sunset is around 8:30 PM in SF in late June, so a 30-min-before trigger is the sooner one.
+        let soon = LightRoutine(title: "Sunset Walk", sunEventType: .sunset, offsetMinutes: 30, isBeforeEvent: true, isEnabled: true)
+        let later = LightRoutine(title: "Late Night Read", sunEventType: .lastLight, offsetMinutes: 0, isEnabled: true)
+        vm.addRoutine(soon)
+        vm.addRoutine(later)
+
+        let now = try makeNoon()
+        let preview = try #require(vm.upcomingRoutinePreview(location: makeSFLocation(), now: now))
+        #expect(preview.routineTitle == "Sunset Walk")
+        #expect(preview.summary == "30 min before Sunset, Every day")
+        #expect(!preview.countdownText.isEmpty)
+    }
+
     // MARK: - Delete
 
     @Test func deleteRemovesRoutineFromStore() {

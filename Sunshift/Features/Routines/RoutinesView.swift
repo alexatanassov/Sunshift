@@ -4,6 +4,7 @@ struct RoutinesView: View {
     @Environment(RoutinesViewModel.self) private var viewModel
     @Environment(SubscriptionService.self) private var subscriptionService
     @Environment(AlarmKitBridge.self) private var alarmKitBridge
+    @Environment(LocationViewModel.self) private var locationViewModel
     @State private var showingCreate = false
     @State private var editingRoutine: LightRoutine?
     @State private var showingPlus = false
@@ -12,6 +13,9 @@ struct RoutinesView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: SunshiftSpacing.sm) {
+                    upcomingRoutineCard
+                        .padding(.bottom, SunshiftSpacing.xs)
+
                     if viewModel.routines.isEmpty {
                         emptyState
                     } else {
@@ -77,6 +81,35 @@ struct RoutinesView: View {
     }
 
     // MARK: - Subviews
+
+    private var upcomingRoutineCard: some View {
+        VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
+            if let upcoming = viewModel.upcomingRoutinePreview(location: locationViewModel.resolvedLocation) {
+                Text("Time until \(upcoming.routineTitle)")
+                    .font(SunshiftTypography.headline())
+                    .foregroundStyle(SunshiftColors.secondaryText)
+                Text(upcoming.countdownText)
+                    .font(SunshiftTypography.display(40))
+                    .foregroundStyle(SunshiftColors.primaryText)
+                    .monospacedDigit()
+                Text(upcoming.summary)
+                    .font(SunshiftTypography.body())
+                    .foregroundStyle(SunshiftColors.secondaryText)
+            } else {
+                Text("No upcoming routine")
+                    .font(SunshiftTypography.headline())
+                    .foregroundStyle(SunshiftColors.primaryText)
+                Text("Create a routine that follows the sun.")
+                    .font(SunshiftTypography.body())
+                    .foregroundStyle(SunshiftColors.secondaryText)
+            }
+        }
+        .padding(SunshiftSpacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SunshiftColors.cardBackground, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.large))
+        .cardShadow()
+        .accessibilityElement(children: .combine)
+    }
 
     private var routineList: some View {
         VStack(spacing: SunshiftSpacing.md) {
@@ -249,4 +282,5 @@ private struct RoutineRow: View {
     RoutinesView()
         .environment(vm)
         .environment(sub)
+        .environment(LocationViewModel(subscriptionService: sub))
 }

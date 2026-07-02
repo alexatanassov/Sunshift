@@ -4,6 +4,7 @@ import Foundation
 final class RoutinesViewModel {
     private let store: RoutineStore
     private let subscriptionService: SubscriptionService
+    private let sunService: SunService
 
     var routines: [LightRoutine] { store.routines }
 
@@ -15,9 +16,42 @@ final class RoutinesViewModel {
         !subscriptionService.isPlusUser && routines.count >= FreeTierLimits.maxActiveRoutines
     }
 
-    init(store: RoutineStore, subscriptionService: SubscriptionService) {
+    init(store: RoutineStore, subscriptionService: SubscriptionService, sunService: SunService = SunService()) {
         self.store = store
         self.subscriptionService = subscriptionService
+        self.sunService = sunService
+    }
+
+    // MARK: - Upcoming routine
+
+    struct UpcomingRoutinePreview: Equatable {
+        let routineTitle: String
+        let summary: String
+        let countdownText: String
+    }
+
+    // Finds the soonest upcoming trigger across all enabled routines at `location`
+    // and formats it for the countdown card. Returns nil when nothing is upcoming.
+    func upcomingRoutinePreview(location: SavedLocation, now: Date = Date()) -> UpcomingRoutinePreview? {
+        let nextTrigger = routines
+            .compactMap { routine -> (LightRoutine, Date)? in
+                guard let trigger = RoutineScheduler.nextTriggerDate(
+                    for: routine,
+                    sunService: sunService,
+                    location: location,
+                    after: now
+                ) else { return nil }
+                return (routine, trigger)
+            }
+            .min(by: { $0.1 < $1.1 })
+
+        guard let (routine, trigger) = nextTrigger else { return nil }
+
+        return UpcomingRoutinePreview(
+            routineTitle: routine.title,
+            summary: "\(triggerDescription(for: routine)), \(activeDaysSummary(for: routine))",
+            countdownText: trigger.timeIntervalSince(now).formattedDuration
+        )
     }
 
     // MARK: - Display helpers
