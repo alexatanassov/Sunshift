@@ -4,6 +4,7 @@ struct TodayView: View {
     @Environment(LocationViewModel.self) private var locationViewModel
     @Environment(RoutineStore.self) private var routineStore
     @State private var viewModel = TodayViewModel()
+    private let sunService = SunService()
 
     var body: some View {
         NavigationStack {
@@ -54,7 +55,12 @@ struct TodayView: View {
     }
 
     private func refresh() {
-        let enabledRoutine = routineStore.routines.first(where: { $0.isEnabled })
+        let enabledRoutine = RoutineScheduler.soonestUpcomingRoutine(
+            in: routineStore.routines,
+            sunService: sunService,
+            location: locationViewModel.resolvedLocation,
+            after: Date()
+        )?.routine
         viewModel.refresh(
             location: locationViewModel.resolvedLocation,
             isUsingFallback: locationViewModel.isUsingFallback,

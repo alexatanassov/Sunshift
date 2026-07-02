@@ -33,19 +33,12 @@ final class RoutinesViewModel {
     // Finds the soonest upcoming trigger across all enabled routines at `location`
     // and formats it for the countdown card. Returns nil when nothing is upcoming.
     func upcomingRoutinePreview(location: SavedLocation, now: Date = Date()) -> UpcomingRoutinePreview? {
-        let nextTrigger = routines
-            .compactMap { routine -> (LightRoutine, Date)? in
-                guard let trigger = RoutineScheduler.nextTriggerDate(
-                    for: routine,
-                    sunService: sunService,
-                    location: location,
-                    after: now
-                ) else { return nil }
-                return (routine, trigger)
-            }
-            .min(by: { $0.1 < $1.1 })
-
-        guard let (routine, trigger) = nextTrigger else { return nil }
+        guard let (routine, trigger) = RoutineScheduler.soonestUpcomingRoutine(
+            in: routines,
+            sunService: sunService,
+            location: location,
+            after: now
+        ) else { return nil }
 
         return UpcomingRoutinePreview(
             routineTitle: routine.title,

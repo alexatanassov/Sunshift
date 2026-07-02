@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct RoutinesView: View {
     @Environment(RoutinesViewModel.self) private var viewModel
@@ -187,6 +188,7 @@ private struct NotificationsNudgeCard: View {
     let notificationPermissionService: NotificationPermissionService
     let alarmKitBridge: AlarmKitBridge
 
+    @Environment(\.openURL) private var openURL
     @State private var isRequesting = false
 
     private var nudgeState: NotificationNudgeState {
@@ -217,6 +219,14 @@ private struct NotificationsNudgeCard: View {
                     Text("Alerts are turned off. Enable them in Settings to get notified.")
                         .font(SunshiftTypography.caption())
                         .foregroundStyle(SunshiftColors.secondaryText.opacity(0.75))
+
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            openURL(url)
+                        }
+                    }
+                    .font(SunshiftTypography.headline())
+                    .foregroundStyle(SunshiftColors.sunsetAmber)
                 } else {
                     Button(isRequesting ? "Requesting..." : "Enable Alerts") {
                         isRequesting = true

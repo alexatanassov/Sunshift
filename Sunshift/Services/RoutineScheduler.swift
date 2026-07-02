@@ -43,4 +43,22 @@ struct RoutineScheduler {
 
         return nil
     }
+
+    // Finds the enabled routine in `routines` whose upcoming trigger date is soonest.
+    // Returns nil when none of the routines have an upcoming trigger.
+    static func soonestUpcomingRoutine(
+        in routines: [LightRoutine],
+        sunService: SunService,
+        location: SavedLocation,
+        after now: Date
+    ) -> (routine: LightRoutine, trigger: Date)? {
+        routines
+            .compactMap { routine -> (routine: LightRoutine, trigger: Date)? in
+                guard let trigger = nextTriggerDate(for: routine, sunService: sunService, location: location, after: now) else {
+                    return nil
+                }
+                return (routine, trigger)
+            }
+            .min(by: { $0.trigger < $1.trigger })
+    }
 }
