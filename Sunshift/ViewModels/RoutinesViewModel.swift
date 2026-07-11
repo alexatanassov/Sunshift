@@ -43,7 +43,7 @@ final class RoutinesViewModel {
         return UpcomingRoutinePreview(
             routineTitle: routine.title,
             summary: "\(triggerDescription(for: routine)), \(activeDaysSummary(for: routine))",
-            countdownText: trigger.timeIntervalSince(now).formattedDuration
+            countdownText: trigger.timeIntervalSince(now).formattedDurationWithSeconds
         )
     }
 

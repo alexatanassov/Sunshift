@@ -69,6 +69,41 @@ struct FormattedCountdownTests {
     }
 }
 
+// MARK: - TimeInterval.formattedDurationWithSeconds
+
+struct FormattedDurationWithSecondsTests {
+
+    @Test func underOneMinuteShowsSecondsOnly() {
+        let interval: TimeInterval = 45
+        #expect(interval.formattedDurationWithSeconds == "45s")
+    }
+
+    @Test func exactlyOneMinuteShowsZeroPaddedSeconds() {
+        let interval: TimeInterval = 60
+        #expect(interval.formattedDurationWithSeconds == "1m 00s")
+    }
+
+    @Test func twelveMinutesFourSecondsZeroPadsSeconds() {
+        let interval: TimeInterval = 12 * 60 + 4
+        #expect(interval.formattedDurationWithSeconds == "12m 04s")
+    }
+
+    @Test func oneHourTwentyFourMinutesEightSeconds() {
+        let interval: TimeInterval = 1 * 3600 + 24 * 60 + 8
+        #expect(interval.formattedDurationWithSeconds == "1h 24m 08s")
+    }
+
+    @Test func fractionalSecondsRoundDownNotUp() {
+        let interval: TimeInterval = 90.9
+        #expect(interval.formattedDurationWithSeconds == "1m 30s")
+    }
+
+    @Test func negativeIntervalClampsToZero() {
+        let interval: TimeInterval = -5
+        #expect(interval.formattedDurationWithSeconds == "0s")
+    }
+}
+
 // MARK: - TodayViewModel
 
 struct TodayViewModelTests {

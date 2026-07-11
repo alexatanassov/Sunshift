@@ -91,30 +91,36 @@ struct RoutinesView: View {
     // MARK: - Subviews
 
     private var upcomingRoutineCard: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            upcomingRoutineCardContent(now: context.date)
+        }
+    }
+
+    private func upcomingRoutineCardContent(now: Date) -> some View {
         VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
-            if let upcoming = viewModel.upcomingRoutinePreview(location: locationViewModel.resolvedLocation) {
+            if let upcoming = viewModel.upcomingRoutinePreview(location: locationViewModel.resolvedLocation, now: now) {
                 Text("Time until \(upcoming.routineTitle)")
                     .font(SunshiftTypography.headline())
-                    .foregroundStyle(SunshiftColors.secondaryText)
+                    .foregroundStyle(.white.opacity(0.85))
                 Text(upcoming.countdownText)
-                    .font(SunshiftTypography.display(40))
-                    .foregroundStyle(SunshiftColors.primaryText)
+                    .font(SunshiftTypography.display(52))
+                    .foregroundStyle(.white)
                     .monospacedDigit()
                 Text(upcoming.summary)
                     .font(SunshiftTypography.body())
-                    .foregroundStyle(SunshiftColors.secondaryText)
+                    .foregroundStyle(.white.opacity(0.85))
             } else {
                 Text("No upcoming routine")
                     .font(SunshiftTypography.headline())
-                    .foregroundStyle(SunshiftColors.primaryText)
+                    .foregroundStyle(.white)
                 Text("Create a routine that follows the sun.")
                     .font(SunshiftTypography.body())
-                    .foregroundStyle(SunshiftColors.secondaryText)
+                    .foregroundStyle(.white.opacity(0.8))
             }
         }
         .padding(SunshiftSpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SunshiftColors.cardBackground, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.large))
+        .background(SunshiftGradients.sunrise, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.large))
         .cardShadow()
         .accessibilityElement(children: .combine)
     }
