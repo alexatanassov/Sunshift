@@ -1,8 +1,10 @@
 import SwiftUI
 import MapKit
+import CoreLocation
 
-// Shows real forecast UV data as markers over a physical map, for a 5x5 grid of sample
-// points around a single coordinate. Purely descriptive: UV Index bands only, no health,
+// Shows real forecast UV data as a soft local heat overlay over a physical map: sample
+// points near the active coordinate blend into translucent, radial-gradient-style circles
+// rather than a scattered grid of pins. Purely descriptive: UV Index bands only, no health,
 // safety, or sunscreen guidance of any kind.
 struct UVMapView: View {
     let coordinate: UVForecastCoordinate
@@ -68,12 +70,31 @@ struct UVMapView: View {
 
     private var mapLayer: some View {
         Map(position: $cameraPosition) {
-            ForEach(gridPoints) { point in
+            ForEach(nearbyPoints) { point in
+                heatBlobContent(for: point)
+            }
+            ForEach(nearbyPoints) { point in
                 Annotation("", coordinate: point.coordinate) {
                     UVMarker(point: point)
                 }
             }
         }
+    }
+
+    // Renders one sample as a soft blob: three concentric circles of increasing opacity
+    // toward the center, anchored to the sample's real coordinate. MapKit projects these
+    // natively, so they stay correctly placed and sized through pan and zoom with no
+    // screen-space math, and neighboring blobs visually blend where they overlap.
+    @MapContentBuilder
+    private func heatBlobContent(for point: UVDataPoint) -> some MapContent {
+        let color = point.category.markerColor
+        let radius = heatBlobRadiusMeters
+        MapCircle(center: point.coordinate, radius: radius)
+            .foregroundStyle(color.opacity(0.10))
+        MapCircle(center: point.coordinate, radius: radius * 0.6)
+            .foregroundStyle(color.opacity(0.18))
+        MapCircle(center: point.coordinate, radius: radius * 0.32)
+            .foregroundStyle(color.opacity(0.28))
     }
 
     private var gridPoints: [UVDataPoint] {
@@ -83,6 +104,33 @@ struct UVMapView: View {
         case .idle, .loading, .failed, .regionTooLarge:
             return []
         }
+    }
+
+    // The sample points the heat overlay and markers actually render: only those within
+    // `UVHeatOverlayConfig.localRadiusMiles` of the active coordinate. This is what keeps
+    // the overlay feeling like a local patch around "here" rather than covering the full
+    // fetched grid edge to edge.
+    private var nearbyPoints: [UVDataPoint] {
+        let center = activeCenterCoordinate
+        return gridPoints.filter { $0.coordinate.distanceMiles(to: center) <= UVHeatOverlayConfig.localRadiusMiles }
+    }
+
+    private var activeCenterCoordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude)
+    }
+
+    // Sizes each blob so it overlaps its nearest neighbor rather than leaving gaps or hard
+    // edges. Derives spacing from however many points actually came back (assumed square,
+    // e.g. 25 for a 5x5 grid) rather than a hardcoded grid size, so this keeps working
+    // unchanged if the sampler's grid size later grows to 9x9 or 11x11.
+    private var heatBlobRadiusMeters: Double {
+        let sampleCount = max(gridPoints.count, 1)
+        let gridSize = max(2, Int(Double(sampleCount).squareRoot().rounded()))
+        let spacingDegrees = spanDegrees / Double(gridSize - 1)
+        let center = activeCenterCoordinate
+        let neighbor = CLLocationCoordinate2D(latitude: center.latitude + spacingDegrees, longitude: center.longitude)
+        let spacingMiles = center.distanceMiles(to: neighbor)
+        return spacingMiles * UVHeatOverlayConfig.blobOverlapFactor * UVHeatOverlayConfig.metersPerMile
     }
 
     private var isShowingData: Bool {
@@ -140,19 +188,40 @@ struct UVMapView: View {
     }
 }
 
+// MARK: - Heat overlay configuration
+
+// Tunable parameters for the local UV heat overlay. Adjust `localRadiusMiles` to widen or
+// narrow how far from the active coordinate the overlay reaches, e.g. 20, 25, or 30 miles.
+private enum UVHeatOverlayConfig {
+    static let localRadiusMiles: Double = 25
+    static let metersPerMile: Double = 1609.34
+    // How far a blob spreads past the spacing to its nearest neighbor, so adjacent blobs
+    // overlap and blend rather than leaving hard edges or visible gaps.
+    static let blobOverlapFactor: Double = 1.15
+}
+
+private extension CLLocationCoordinate2D {
+    func distanceMiles(to other: CLLocationCoordinate2D) -> Double {
+        let here = CLLocation(latitude: latitude, longitude: longitude)
+        let there = CLLocation(latitude: other.latitude, longitude: other.longitude)
+        return here.distance(from: there) / UVHeatOverlayConfig.metersPerMile
+    }
+}
+
 // MARK: - Marker
 
+// A small, subtle dot rather than a large numbered pin: the heat overlay now carries the
+// UV value visually, so the marker just marks the sample location without competing for
+// attention. The exact index stays available to VoiceOver.
 private struct UVMarker: View {
     let point: UVDataPoint
 
     var body: some View {
-        Text(indexText)
-            .font(SunshiftTypography.caption(11))
-            .foregroundStyle(.white)
-            .frame(width: 28, height: 28)
-            .background(point.category.markerColor, in: Circle())
-            .overlay(Circle().stroke(.white.opacity(0.8), lineWidth: 1.5))
-            .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+        Circle()
+            .fill(.white.opacity(0.85))
+            .frame(width: 6, height: 6)
+            .overlay(Circle().stroke(point.category.markerColor.opacity(0.7), lineWidth: 1))
+            .shadow(color: .black.opacity(0.15), radius: 1, x: 0, y: 0.5)
             .accessibilityLabel("UV index \(indexText), \(point.category.displayName)")
     }
 
