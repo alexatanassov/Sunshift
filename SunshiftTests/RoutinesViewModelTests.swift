@@ -293,7 +293,7 @@ struct RoutinesViewModelTests {
         let preview = try #require(vm.upcomingRoutinePreview(location: makeSFLocation(), now: now))
         #expect(preview.routineTitle == "Sunset Walk")
         #expect(preview.summary == "30 min before Sunset, Every day")
-        #expect(preview.countdownText.range(of: #"^(\d+h )?\d+m \d{2}s$|^\d+s$"#, options: .regularExpression) != nil)
+        #expect(preview.countdownText.range(of: #"^(\d+d )?(\d+h )?\d+m \d{2}s$|^\d+s$"#, options: .regularExpression) != nil)
     }
 
     // MARK: - Delete

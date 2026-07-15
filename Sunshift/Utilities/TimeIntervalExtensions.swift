@@ -19,13 +19,16 @@ extension TimeInterval {
         return "in \(formatHoursAndMinutes())"
     }
 
-    /// Formats a countdown with second-level precision, e.g. "1h 24m 08s", "12m 04s", or "45s".
+    /// Formats a countdown with second-level precision, e.g. "1d 13h 12m 37s", "1h 24m 08s", "12m 04s", or "45s".
     var formattedDurationWithSeconds: String {
         let total = max(0, Int(self))
-        let hours = total / 3600
+        let days = total / 86400
+        let hours = (total % 86400) / 3600
         let minutes = (total % 3600) / 60
         let seconds = total % 60
-        if hours > 0 {
+        if days > 0 {
+            return String(format: "%dd %dh %dm %02ds", days, hours, minutes, seconds)
+        } else if hours > 0 {
             return String(format: "%dh %dm %02ds", hours, minutes, seconds)
         } else if minutes > 0 {
             return String(format: "%dm %02ds", minutes, seconds)

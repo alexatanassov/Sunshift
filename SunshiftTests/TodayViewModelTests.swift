@@ -102,6 +102,11 @@ struct FormattedDurationWithSecondsTests {
         let interval: TimeInterval = -5
         #expect(interval.formattedDurationWithSeconds == "0s")
     }
+
+    @Test func moreThanOneDayShowsDaysHoursMinutesSeconds() {
+        let interval: TimeInterval = 1 * 86400 + 13 * 3600 + 12 * 60 + 37
+        #expect(interval.formattedDurationWithSeconds == "1d 13h 12m 37s")
+    }
 }
 
 // MARK: - TodayViewModel
