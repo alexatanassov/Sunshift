@@ -15,7 +15,7 @@ struct UVMapView: View {
 
     init(
         coordinate: UVForecastCoordinate,
-        spanDegrees: Double = UVMapGridSampler.defaultSpanDegrees,
+        spanDegrees: Double = UVMapRadiusConfig.defaultSpanDegrees,
         viewModel: UVMapViewModel = UVMapViewModel()
     ) {
         self.coordinate = coordinate
@@ -107,12 +107,12 @@ struct UVMapView: View {
     }
 
     // The sample points the heat overlay and markers actually render: only those within
-    // `UVHeatOverlayConfig.localRadiusMiles` of the active coordinate. This is what keeps
+    // `UVMapRadiusConfig.defaultRadiusMiles` of the active coordinate. This is what keeps
     // the overlay feeling like a local patch around "here" rather than covering the full
     // fetched grid edge to edge.
     private var nearbyPoints: [UVDataPoint] {
         let center = activeCenterCoordinate
-        return gridPoints.filter { $0.coordinate.distanceMiles(to: center) <= UVHeatOverlayConfig.localRadiusMiles }
+        return gridPoints.filter { $0.coordinate.distanceMiles(to: center) <= UVMapRadiusConfig.defaultRadiusMiles }
     }
 
     private var activeCenterCoordinate: CLLocationCoordinate2D {
@@ -190,10 +190,10 @@ struct UVMapView: View {
 
 // MARK: - Heat overlay configuration
 
-// Tunable parameters for the local UV heat overlay. Adjust `localRadiusMiles` to widen or
-// narrow how far from the active coordinate the overlay reaches, e.g. 20, 25, or 30 miles.
+// Tunable parameters for the local UV heat overlay. The overlay's reach itself is governed
+// by `UVMapRadiusConfig.defaultRadiusMiles`, the shared radius default, so it can't drift
+// out of sync with the sampling grid's span.
 private enum UVHeatOverlayConfig {
-    static let localRadiusMiles: Double = 25
     static let metersPerMile: Double = 1609.34
     // How far a blob spreads past the spacing to its nearest neighbor, so adjacent blobs
     // overlap and blend rather than leaving hard edges or visible gaps.
@@ -351,7 +351,7 @@ private func previewCacheStore(prepopulatedWith snapshot: UVGridSnapshot? = nil)
 #Preview("Stale cache") {
     let regionKey = UVCacheStore.regionKey(
         center: UVMapPreviewData.coordinate,
-        spanDegrees: UVMapGridSampler.defaultSpanDegrees
+        spanDegrees: UVMapRadiusConfig.defaultSpanDegrees
     )
     let staleSnapshot = UVGridSnapshot(
         points: UVMapPreviewData.points(baseIndex: 3),

@@ -29,11 +29,6 @@ final class UVMapViewModel {
     // requests for a single map load.
     static let defaultGridSize = 9
 
-    // Default radius, in miles, of the local area the UV Map is meant to represent around the
-    // active coordinate. Named so sampling density and overlay locality can be reasoned about
-    // together as the forecast grid grows denser.
-    static let defaultRadiusMiles: Double = 25
-
     // MARK: - Dependencies
 
     private let service: any UVForecastServiceProtocol
@@ -59,7 +54,7 @@ final class UVMapViewModel {
     func load(
         center: UVForecastCoordinate,
         gridSize: Int = defaultGridSize,
-        spanDegrees: Double = UVMapGridSampler.defaultSpanDegrees
+        spanDegrees: Double = UVMapRadiusConfig.defaultSpanDegrees
     ) async {
         guard spanDegrees <= UVMapGridSampler.maxSpanDegrees else {
             state = .regionTooLarge
@@ -91,7 +86,7 @@ final class UVMapViewModel {
     func refresh(
         center: UVForecastCoordinate,
         gridSize: Int = defaultGridSize,
-        spanDegrees: Double = UVMapGridSampler.defaultSpanDegrees
+        spanDegrees: Double = UVMapRadiusConfig.defaultSpanDegrees
     ) async {
         guard spanDegrees <= UVMapGridSampler.maxSpanDegrees else {
             state = .regionTooLarge

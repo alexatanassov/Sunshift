@@ -47,7 +47,7 @@ struct UVMapViewModelTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let now = Date()
-        let regionKey = UVCacheStore.regionKey(center: center, spanDegrees: UVMapGridSampler.defaultSpanDegrees)
+        let regionKey = UVCacheStore.regionKey(center: center, spanDegrees: UVMapRadiusConfig.defaultSpanDegrees)
         let snapshot = makeSnapshot(regionKey: regionKey, fetchedAt: now.addingTimeInterval(-60 * 5))
         cacheStore.save(snapshot)
 
@@ -81,7 +81,7 @@ struct UVMapViewModelTests {
         #expect(isStale == false)
         #expect(snapshot.fetchedAt == now)
 
-        let regionKey = UVCacheStore.regionKey(center: center, spanDegrees: UVMapGridSampler.defaultSpanDegrees)
+        let regionKey = UVCacheStore.regionKey(center: center, spanDegrees: UVMapRadiusConfig.defaultSpanDegrees)
         #expect(cacheStore.load(regionKey: regionKey) == snapshot)
     }
 
@@ -92,7 +92,7 @@ struct UVMapViewModelTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let now = Date()
-        let regionKey = UVCacheStore.regionKey(center: center, spanDegrees: UVMapGridSampler.defaultSpanDegrees)
+        let regionKey = UVCacheStore.regionKey(center: center, spanDegrees: UVMapRadiusConfig.defaultSpanDegrees)
         let expired = makeSnapshot(regionKey: regionKey, fetchedAt: now.addingTimeInterval(-60 * 60 * 25))
         cacheStore.save(expired)
 
@@ -120,7 +120,7 @@ struct UVMapViewModelTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let now = Date()
-        let regionKey = UVCacheStore.regionKey(center: center, spanDegrees: UVMapGridSampler.defaultSpanDegrees)
+        let regionKey = UVCacheStore.regionKey(center: center, spanDegrees: UVMapRadiusConfig.defaultSpanDegrees)
         let stale = makeSnapshot(regionKey: regionKey, fetchedAt: now.addingTimeInterval(-60 * 60 * 2))
         cacheStore.save(stale)
 
@@ -138,7 +138,7 @@ struct UVMapViewModelTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let now = Date()
-        let regionKey = UVCacheStore.regionKey(center: center, spanDegrees: UVMapGridSampler.defaultSpanDegrees)
+        let regionKey = UVCacheStore.regionKey(center: center, spanDegrees: UVMapRadiusConfig.defaultSpanDegrees)
         let stale = makeSnapshot(regionKey: regionKey, fetchedAt: now.addingTimeInterval(-60 * 60 * 2))
         cacheStore.save(stale)
 
@@ -164,7 +164,7 @@ struct UVMapViewModelTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let now = Date()
-        let regionKey = UVCacheStore.regionKey(center: center, spanDegrees: UVMapGridSampler.defaultSpanDegrees)
+        let regionKey = UVCacheStore.regionKey(center: center, spanDegrees: UVMapRadiusConfig.defaultSpanDegrees)
         // Expired, so load() attempts a network fetch rather than returning the cache directly.
         let expired = makeSnapshot(regionKey: regionKey, fetchedAt: now.addingTimeInterval(-60 * 60 * 25))
         cacheStore.save(expired)
