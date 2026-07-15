@@ -49,9 +49,17 @@ struct TodayView: View {
                 TodayTimelineView(schedule: schedule, now: Date())
             }
             EventsSection(viewModel: viewModel)
+            UVMapEntryCard(coordinate: uvMapCoordinate)
             WeekPreviewView(viewModel: viewModel)
             NextRoutineCard(viewModel: viewModel)
         }
+    }
+
+    private var uvMapCoordinate: UVForecastCoordinate? {
+        UVMapEntryResolver.coordinate(
+            for: locationViewModel.activeLocation,
+            isUsingFallback: locationViewModel.isUsingFallback
+        )
     }
 
     private func refresh() {
@@ -381,6 +389,66 @@ private struct EventRow: View {
         .padding(.vertical, 14)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(label): \(detail)")
+    }
+}
+
+// MARK: - UV Map Entry
+
+// Decides whether a real, non-fallback coordinate exists to open the UV Map with.
+// Kept as a pure function, separate from the view, so routing behavior is testable
+// without needing to render SwiftUI.
+enum UVMapEntryResolver {
+    static func coordinate(for location: SavedLocation?, isUsingFallback: Bool) -> UVForecastCoordinate? {
+        guard let location, !isUsingFallback else { return nil }
+        return UVForecastCoordinate(latitude: location.latitude, longitude: location.longitude)
+    }
+}
+
+private struct UVMapEntryCard: View {
+    let coordinate: UVForecastCoordinate?
+
+    var body: some View {
+        if let coordinate {
+            NavigationLink {
+                UVMapView(coordinate: coordinate)
+            } label: {
+                cardContent(isEnabled: true)
+            }
+            .buttonStyle(.plain)
+        } else {
+            cardContent(isEnabled: false)
+        }
+    }
+
+    private func cardContent(isEnabled: Bool) -> some View {
+        HStack(spacing: SunshiftSpacing.md) {
+            Image(systemName: "map.fill")
+                .font(.title2)
+                .foregroundStyle(isEnabled ? SunshiftColors.sunsetAmber : SunshiftColors.secondaryText.opacity(0.5))
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: SunshiftSpacing.xs) {
+                Text("UV Map")
+                    .font(SunshiftTypography.headline())
+                    .foregroundStyle(isEnabled ? SunshiftColors.primaryText : SunshiftColors.primaryText.opacity(0.55))
+                Text(isEnabled ? "See UV levels near you" : "Add a location to view the UV map")
+                    .font(SunshiftTypography.body())
+                    .foregroundStyle(SunshiftColors.secondaryText)
+            }
+
+            Spacer()
+
+            if isEnabled {
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(SunshiftColors.secondaryText.opacity(0.5))
+            }
+        }
+        .padding(SunshiftSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SunshiftColors.cardBackground, in: RoundedRectangle(cornerRadius: SunshiftCornerRadius.medium))
+        .cardShadow()
+        .accessibilityElement(children: .combine)
     }
 }
 
