@@ -9,7 +9,7 @@ final class UVMapViewModel {
 
     // MARK: - State
 
-    enum State: Equatable {
+    nonisolated enum State: Equatable {
         case idle
         case loading
         // `isStale` is true when the snapshot did not come from a fresh network fetch just now

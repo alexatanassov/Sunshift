@@ -2,7 +2,7 @@ import Foundation
 
 // A saved set of UV Map grid points for one region, captured at a point in time.
 // Lets the UV Map show recently fetched data without immediately refetching.
-struct UVGridSnapshot: Codable, Equatable {
+nonisolated struct UVGridSnapshot: Codable, Equatable {
     let points: [UVDataPoint]
     let regionKey: String
     let fetchedAt: Date

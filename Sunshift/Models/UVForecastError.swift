@@ -1,6 +1,6 @@
 import Foundation
 
-enum UVForecastError: Error, LocalizedError {
+nonisolated enum UVForecastError: Error, LocalizedError {
     case invalidRequest
     case requestFailed(underlying: Error)
     case badResponse(statusCode: Int)

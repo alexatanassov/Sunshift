@@ -3,7 +3,7 @@ import Foundation
 // Persists recently fetched UV Map grid snapshots to disk as JSON, so the map can show
 // prior results without immediately refetching. Pure persistence logic only: no
 // networking, no SwiftUI, no MapKit.
-final class UVCacheStore {
+nonisolated final class UVCacheStore {
 
     private let directoryURL: URL
     private let fileManager: FileManager

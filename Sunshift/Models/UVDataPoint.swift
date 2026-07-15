@@ -1,7 +1,7 @@
 import Foundation
 
 // A single sampled UV Index reading at a coordinate, for a specific forecast time.
-struct UVDataPoint: Identifiable, Codable, Equatable {
+nonisolated struct UVDataPoint: Identifiable, Codable, Equatable {
     let id: UUID
     let latitude: Double
     let longitude: Double

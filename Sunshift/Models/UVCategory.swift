@@ -2,7 +2,7 @@ import Foundation
 
 // UV Index severity band, based on the standard WHO/EPA UV Index scale.
 // Purely descriptive: carries a label only, never advice or safety recommendation text.
-enum UVCategory: String, CaseIterable, Identifiable, Codable {
+nonisolated enum UVCategory: String, CaseIterable, Identifiable, Codable {
     case low
     case moderate
     case high

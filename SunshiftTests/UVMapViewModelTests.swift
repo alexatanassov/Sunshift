@@ -2,6 +2,7 @@ import Testing
 import Foundation
 @testable import Sunshift
 
+@MainActor
 struct UVMapViewModelTests {
 
     private let center = UVForecastCoordinate(latitude: 32.75, longitude: -117.15)

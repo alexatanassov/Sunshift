@@ -3,7 +3,7 @@ import Foundation
 // Generates an evenly-spaced geographic grid of sample coordinates around a center point.
 // Used to build the set of locations the UV Map requests forecast data for. Pure logic
 // only: no networking, caching, or map rendering.
-enum UVMapGridSampler {
+nonisolated enum UVMapGridSampler {
 
     static let defaultGridSize = 5
     static let defaultSpanDegrees: Double = 1.0

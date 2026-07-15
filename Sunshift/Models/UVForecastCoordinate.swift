@@ -1,7 +1,7 @@
 import Foundation
 
 // A coordinate to request current UV Index data for.
-struct UVForecastCoordinate: Equatable {
+nonisolated struct UVForecastCoordinate: Equatable {
     let latitude: Double
     let longitude: Double
 
