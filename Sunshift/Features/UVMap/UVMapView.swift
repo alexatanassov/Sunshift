@@ -1,11 +1,13 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import UIKit
 
-// Shows real forecast UV data as a soft local heat overlay over a physical map: sample
-// points near the active coordinate blend into translucent, radial-gradient-style circles
-// rather than a scattered grid of pins. Purely descriptive: UV Index bands only, no health,
-// safety, or sunscreen guidance of any kind.
+// Shows real forecast UV data as one soft local UV field over a physical map, rather than a
+// scattered grid of individual circles or pins. The overlay is an interpolated forecast
+// visualization derived from a handful of sample points: it communicates roughly how UV
+// varies across the local area, not an exact UV value at every pixel. Purely descriptive:
+// UV Index bands only, no health, safety, or sunscreen guidance of any kind.
 struct UVMapView: View {
     let coordinate: UVForecastCoordinate
     private let spanDegrees: Double
@@ -70,31 +72,47 @@ struct UVMapView: View {
 
     private var mapLayer: some View {
         Map(position: $cameraPosition) {
+            localFieldContent
+        }
+    }
+
+    // The local UV field: one broad circle spanning the configured local radius sets the
+    // overall tone for the area, and a soft, many-step blob per sample blends on top of it to
+    // carry local variation. Sample points still project natively via MapCircle, so placement
+    // and sizing stay correct through pan and zoom with no screen-space math. This whole layer
+    // is an interpolated visualization between discrete sample points, not a per-pixel reading.
+    @MapContentBuilder
+    private var localFieldContent: some MapContent {
+        if let bounds = localValueBounds {
+            MapCircle(
+                center: activeCenterCoordinate,
+                radius: UVMapRadiusConfig.defaultRadiusMiles * UVHeatOverlayConfig.metersPerMile
+            )
+            .foregroundStyle(UVFieldColor.baseColor(forUVIndex: bounds.mean).opacity(0.07))
+
             ForEach(nearbyPoints) { point in
-                heatBlobContent(for: point)
-            }
-            ForEach(nearbyPoints) { point in
-                Annotation("", coordinate: point.coordinate) {
-                    UVMarker(point: point)
-                }
+                fieldBlobContent(for: point, bounds: bounds)
             }
         }
     }
 
-    // Renders one sample as a soft blob: three concentric circles of increasing opacity
-    // toward the center, anchored to the sample's real coordinate. MapKit projects these
-    // natively, so they stay correctly placed and sized through pan and zoom with no
-    // screen-space math, and neighboring blobs visually blend where they overlap.
+    // Renders one sample as a soft blob with several closely-spaced, low-opacity steps rather
+    // than a few widely-spaced rings, so it reads as a continuous falloff toward its edges
+    // instead of visible concentric bands. Neighboring blobs are sized to overlap generously,
+    // so they blend into each other rather than standing out as separate bubbles.
     @MapContentBuilder
-    private func heatBlobContent(for point: UVDataPoint) -> some MapContent {
-        let color = point.category.markerColor
+    private func fieldBlobContent(for point: UVDataPoint, bounds: LocalValueBounds) -> some MapContent {
+        let color = UVFieldColor.baseColor(forUVIndex: point.uvIndex)
+        let opacity = UVFieldColor.fillOpacity(forUVIndex: point.uvIndex, bounds: bounds)
         let radius = heatBlobRadiusMeters
         MapCircle(center: point.coordinate, radius: radius)
-            .foregroundStyle(color.opacity(0.10))
-        MapCircle(center: point.coordinate, radius: radius * 0.6)
-            .foregroundStyle(color.opacity(0.18))
-        MapCircle(center: point.coordinate, radius: radius * 0.32)
-            .foregroundStyle(color.opacity(0.28))
+            .foregroundStyle(color.opacity(opacity * 0.30))
+        MapCircle(center: point.coordinate, radius: radius * 0.72)
+            .foregroundStyle(color.opacity(opacity * 0.50))
+        MapCircle(center: point.coordinate, radius: radius * 0.48)
+            .foregroundStyle(color.opacity(opacity * 0.72))
+        MapCircle(center: point.coordinate, radius: radius * 0.24)
+            .foregroundStyle(color.opacity(opacity))
     }
 
     private var gridPoints: [UVDataPoint] {
@@ -117,6 +135,17 @@ struct UVMapView: View {
 
     private var activeCenterCoordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude)
+    }
+
+    // The min, max, and mean UV Index across the currently loaded local sample points. This is
+    // the "local color normalization layer": the overlay's contrast is drawn from how values
+    // vary within this specific loaded radius, not from the full 0-16 UV Index scale, so small
+    // but real nearby differences stay visible instead of being flattened into one color.
+    private var localValueBounds: LocalValueBounds? {
+        let values = nearbyPoints.map(\.uvIndex)
+        guard let low = values.min(), let high = values.max() else { return nil }
+        let mean = values.reduce(0, +) / Double(values.count)
+        return LocalValueBounds(min: low, max: high, mean: mean)
     }
 
     // Sizes each blob so it overlaps its nearest neighbor rather than leaving gaps or hard
@@ -195,9 +224,103 @@ struct UVMapView: View {
 // out of sync with the sampling grid's span.
 private enum UVHeatOverlayConfig {
     static let metersPerMile: Double = 1609.34
-    // How far a blob spreads past the spacing to its nearest neighbor, so adjacent blobs
-    // overlap and blend rather than leaving hard edges or visible gaps.
-    static let blobOverlapFactor: Double = 1.15
+    // How far a blob spreads past the spacing to its nearest neighbor. Generous overlap is
+    // what makes neighboring blobs read as one continuous field rather than separate bubbles.
+    static let blobOverlapFactor: Double = 1.6
+}
+
+// MARK: - Local color normalization
+
+// The min, max, and mean UV Index across the sample points currently loaded within the local
+// radius. Drives the overlay's local color normalization: contrast is drawn from this window,
+// not the full UV Index scale.
+private struct LocalValueBounds {
+    let min: Double
+    let max: Double
+    let mean: Double
+}
+
+// Maps a UV Index value to a color and a fill opacity for the local field overlay.
+//
+// Two things are combined here, deliberately kept separate:
+// - `baseColor` is an absolute, continuous mapping from UV Index to color: it interpolates
+//   smoothly between the same category anchor colors used in the legend, so a reading of 6.2
+//   and one of 7.8 (both nominally "High") still render as visibly different shades instead
+//   of identical orange.
+// - `fillOpacity` is the local normalization layer: it stretches visible contrast across
+//   whatever min/max is actually loaded nearby, so small real differences stay legible.
+//
+// The two are combined rather than one alone so contrast is drawn out locally without ever
+// remapping a value's hue away from what it would show anywhere else on the map — bounded,
+// so the overlay can't become misleading about the absolute UV level.
+private enum UVFieldColor {
+    // Below this much spread (in UV Index units) across the loaded local radius, differences
+    // are treated as noise rather than meaningful signal: the overlay falls back to a calm,
+    // mostly uniform look rather than stretching a tiny gap into exaggerated contrast.
+    private static let minMeaningfulRange: Double = 1.0
+
+    // Bounds on how much the local normalization layer can vary fill opacity, so contrast
+    // stays gentle even at the extremes of a wide local range.
+    private static let baseOpacity: Double = 0.12
+    private static let opacityContrastRange: Double = 0.14
+    private static let uniformOpacity: Double = 0.16
+
+    // Continuous color anchors across the standard UV Index scale, matching the legend's
+    // category colors. Values interpolate between neighboring anchors rather than snapping.
+    private static let stops: [(uv: Double, color: Color)] = [
+        (0, .green),
+        (3, .yellow),
+        (6, .orange),
+        (8, .red),
+        (11, SunshiftColors.duskPurple)
+    ]
+
+    static func baseColor(forUVIndex uvIndex: Double) -> Color {
+        let lowestStop = stops[0]
+        let highestStop = stops[stops.count - 1]
+        let clamped = min(max(uvIndex, lowestStop.uv), highestStop.uv)
+
+        for index in 0..<(stops.count - 1) {
+            let lower = stops[index]
+            let upper = stops[index + 1]
+            guard clamped <= upper.uv else { continue }
+            let span = upper.uv - lower.uv
+            let t = span > 0 ? (clamped - lower.uv) / span : 0
+            return lower.color.blended(with: upper.color, amount: t)
+        }
+        return highestStop.color
+    }
+
+    static func fillOpacity(forUVIndex uvIndex: Double, bounds: LocalValueBounds) -> Double {
+        let range = bounds.max - bounds.min
+        guard range >= minMeaningfulRange else { return uniformOpacity }
+        let t = (uvIndex - bounds.min) / range
+        return baseOpacity + t * opacityContrastRange
+    }
+}
+
+private extension Color {
+    // Linear blend between two colors' RGB components. Good enough for a smooth-looking
+    // overlay gradient between adjacent legend colors; not intended for perceptually-uniform
+    // color science.
+    func blended(with other: Color, amount: Double) -> Color {
+        let t = max(0, min(1, amount))
+        let a = UIColor(self).resolvedComponents
+        let b = UIColor(other).resolvedComponents
+        return Color(
+            red: a.r + (b.r - a.r) * t,
+            green: a.g + (b.g - a.g) * t,
+            blue: a.b + (b.b - a.b) * t
+        )
+    }
+}
+
+private extension UIColor {
+    var resolvedComponents: (r: Double, g: Double, b: Double) {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (Double(r), Double(g), Double(b))
+    }
 }
 
 private extension CLLocationCoordinate2D {
@@ -205,28 +328,6 @@ private extension CLLocationCoordinate2D {
         let here = CLLocation(latitude: latitude, longitude: longitude)
         let there = CLLocation(latitude: other.latitude, longitude: other.longitude)
         return here.distance(from: there) / UVHeatOverlayConfig.metersPerMile
-    }
-}
-
-// MARK: - Marker
-
-// A small, subtle dot rather than a large numbered pin: the heat overlay now carries the
-// UV value visually, so the marker just marks the sample location without competing for
-// attention. The exact index stays available to VoiceOver.
-private struct UVMarker: View {
-    let point: UVDataPoint
-
-    var body: some View {
-        Circle()
-            .fill(.white.opacity(0.85))
-            .frame(width: 6, height: 6)
-            .overlay(Circle().stroke(point.category.markerColor.opacity(0.7), lineWidth: 1))
-            .shadow(color: .black.opacity(0.15), radius: 1, x: 0, y: 0.5)
-            .accessibilityLabel("UV index \(indexText), \(point.category.displayName)")
-    }
-
-    private var indexText: String {
-        String(Int(point.uvIndex.rounded()))
     }
 }
 
