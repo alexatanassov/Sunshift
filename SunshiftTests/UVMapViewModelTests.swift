@@ -196,7 +196,7 @@ struct UVMapViewModelTests {
 
     // MARK: - Grid size
 
-    @Test func generatedServiceRequestUsesExpected5x5GridCount() async {
+    @Test func generatedServiceRequestUsesExpected9x9GridCountByDefault() async {
         let (cacheStore, directory) = makeCacheStore()
         defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -205,7 +205,31 @@ struct UVMapViewModelTests {
 
         await viewModel.load(center: center)
 
+        #expect(service.requestedCoordinates.first?.count == 81)
+    }
+
+    @Test func gridSizeCanStillBeRequestedAsLegacy5x5() async {
+        let (cacheStore, directory) = makeCacheStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let service = MockUVForecastService()
+        let viewModel = UVMapViewModel(service: service, cacheStore: cacheStore, now: { Date() })
+
+        await viewModel.load(center: center, gridSize: 5)
+
         #expect(service.requestedCoordinates.first?.count == 25)
+    }
+
+    @Test func refreshUsesExpected9x9GridCountByDefault() async {
+        let (cacheStore, directory) = makeCacheStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let service = MockUVForecastService()
+        let viewModel = UVMapViewModel(service: service, cacheStore: cacheStore, now: { Date() })
+
+        await viewModel.refresh(center: center)
+
+        #expect(service.requestedCoordinates.first?.count == 81)
     }
 
     // MARK: - Region too large

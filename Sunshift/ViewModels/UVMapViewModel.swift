@@ -21,6 +21,19 @@ final class UVMapViewModel {
 
     private(set) var state: State = .idle
 
+    // MARK: - Sampling configuration
+
+    // Default sampling density for the UV Map: denser than `UVMapGridSampler`'s own baseline
+    // grid size (5x5, left unchanged for other callers) so the heat overlay has enough nearby
+    // points to blend smoothly. 9x9 is 81 coordinates, an acceptable number of forecast
+    // requests for a single map load.
+    static let defaultGridSize = 9
+
+    // Default radius, in miles, of the local area the UV Map is meant to represent around the
+    // active coordinate. Named so sampling density and overlay locality can be reasoned about
+    // together as the forecast grid grows denser.
+    static let defaultRadiusMiles: Double = 25
+
     // MARK: - Dependencies
 
     private let service: any UVForecastServiceProtocol
@@ -43,7 +56,11 @@ final class UVMapViewModel {
     // cache is shown immediately (call `refresh` to update it in the background). Missing or
     // expired cache triggers a network fetch.
     @MainActor
-    func load(center: UVForecastCoordinate, spanDegrees: Double = UVMapGridSampler.defaultSpanDegrees) async {
+    func load(
+        center: UVForecastCoordinate,
+        gridSize: Int = defaultGridSize,
+        spanDegrees: Double = UVMapGridSampler.defaultSpanDegrees
+    ) async {
         guard spanDegrees <= UVMapGridSampler.maxSpanDegrees else {
             state = .regionTooLarge
             return
@@ -65,13 +82,17 @@ final class UVMapViewModel {
             }
         }
 
-        await fetchAndStore(center: center, spanDegrees: spanDegrees, regionKey: regionKey, fallback: cached)
+        await fetchAndStore(center: center, gridSize: gridSize, spanDegrees: spanDegrees, regionKey: regionKey, fallback: cached)
     }
 
     // Forces a network refresh regardless of cache freshness. Useful for a pull-to-refresh
     // action on data that's already being shown as stale-but-usable.
     @MainActor
-    func refresh(center: UVForecastCoordinate, spanDegrees: Double = UVMapGridSampler.defaultSpanDegrees) async {
+    func refresh(
+        center: UVForecastCoordinate,
+        gridSize: Int = defaultGridSize,
+        spanDegrees: Double = UVMapGridSampler.defaultSpanDegrees
+    ) async {
         guard spanDegrees <= UVMapGridSampler.maxSpanDegrees else {
             state = .regionTooLarge
             return
@@ -79,7 +100,7 @@ final class UVMapViewModel {
 
         let regionKey = UVCacheStore.regionKey(center: center, spanDegrees: spanDegrees)
         let cached = cacheStore.load(regionKey: regionKey)
-        await fetchAndStore(center: center, spanDegrees: spanDegrees, regionKey: regionKey, fallback: cached)
+        await fetchAndStore(center: center, gridSize: gridSize, spanDegrees: spanDegrees, regionKey: regionKey, fallback: cached)
     }
 
     // MARK: - Private
@@ -87,13 +108,14 @@ final class UVMapViewModel {
     @MainActor
     private func fetchAndStore(
         center: UVForecastCoordinate,
+        gridSize: Int,
         spanDegrees: Double,
         regionKey: String,
         fallback: UVGridSnapshot?
     ) async {
         state = .loading
 
-        let coordinates = UVMapGridSampler.generateGrid(center: center, spanDegrees: spanDegrees)
+        let coordinates = UVMapGridSampler.generateGrid(center: center, gridSize: gridSize, spanDegrees: spanDegrees)
 
         do {
             let points = try await service.fetchCurrentUVIndex(for: coordinates)
